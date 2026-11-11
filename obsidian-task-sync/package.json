@@ -1,0 +1,63 @@
+{
+  "name": "obsidian-task-sync",
+  "version": "0.1.0",
+  "description": "Live two-way Obsidian daily checklists and a game-style skill tree canvas for DeepSeek Harness",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "default": "./dist/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "listedByDefault": true
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node tests/backend.test.mjs && node tests/bridge.test.mjs && node tests/client-smoke.mjs",
+    "test:backend": "node tests/backend.test.mjs",
+    "test:bridge": "node tests/bridge.test.mjs",
+    "test:client": "npm run build && node tests/client-smoke.mjs",
+    "pack": "npm pack",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "dsh": "^0.2.2-rc.1",
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
+}

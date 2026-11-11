@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Obsidian task sync">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="4" x2="58" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17212C"/>
+      <stop offset="1" stop-color="#080B10"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="17" y1="18" x2="50" y2="49" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FF0CE"/>
+      <stop offset="1" stop-color="#6FA8FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="17" fill="url(#bg)" stroke="#2C3A4A" stroke-width="1.4"/>
+  <rect x="14" y="12" width="36" height="40" rx="9" fill="#0D131B" stroke="#33465A" stroke-width="1.4"/>
+  <path d="M23 23.5h18M23 31h13M23 38.5h9" stroke="#64788E" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="43" cy="43.5" r="10.5" fill="#0D131B" stroke="url(#mark)" stroke-width="2.2"/>
+  <path d="M38.3 43.5l3.2 3.2 6.3-7" fill="none" stroke="url(#mark)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

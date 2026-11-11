@@ -1,0 +1,14 @@
+# Local development patch: mount this plugin into a running `dsh web`.
+#
+# Start the Web UI with:
+#   pnpm dsh web --patch ./usage-popup/cordis.yml
+#
+# The `name` must be an ABSOLUTE path to the plugin module, on the same machine
+# as the server. Adjust it to your checkout location.
+#
+# NOTE: this requires a repository checkout (the packaged Desktop app has no
+# source checkout on disk and no `--patch`/HMR loop). See PLUGIN_NOTES.md.
+
+- insert:
+    - id: usage-popup
+      name: 'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/usage-popup/src/index.tsx'

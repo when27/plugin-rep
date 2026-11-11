@@ -1,0 +1,9 @@
+# Bundle patch for `obsidian-task-sync`.
+#
+# The Host row registers the same-origin filesystem bridge and live SSE watcher.
+# The package's `dsh.client` declaration supplies the sidebar launcher and the
+# detached checklist widget through `dist/client.js`.
+
+- insert:
+    - id: obsidian-task-sync
+      name: obsidian-task-sync

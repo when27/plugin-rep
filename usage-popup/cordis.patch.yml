@@ -1,0 +1,10 @@
+# Bundle patch for `usage-popup`.
+#
+# Installed as a profile bundle, this package supplies both halves of the
+# plugin: the host entry (`dist/index.js`, a no-op) and the web client bundle
+# (`dist/client.js`). The row name is the package name so the client-module
+# scan can find `dsh.client` on the installed manifest.
+
+- insert:
+    - id: usage-popup
+      name: usage-popup

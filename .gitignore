@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local environment / secrets
+.env
+
+# Local probe / scratch output (never committed)
+.probe/
+
+# npm download cache kept inside plugin dirs (build scratch, never committed)
+.npm-cache/
+
+# ---------------------------------------------------------------------------
+# Explicitly NOT ignored — keep these tracked.
+# Release tarballs and the DSH working config/memory must survive `git add -A`.
+# ---------------------------------------------------------------------------
+!*.tgz
+!.dsh/agent_rules.md
+!MEMORY.md
