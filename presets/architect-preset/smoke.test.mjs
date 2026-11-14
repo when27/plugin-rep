@@ -7,9 +7,15 @@
 //   * per-agent `agent.ctx.tools.restrict()` for schema narrowing, filtered by
 //     `view(scope).restrictableNames` (DSH throws on names that are not
 //     restrictable, which used to be swallowed as a silent no-op);
-//   * preset identity from the `agentPreset` session projection, not the header.
+//   * preset identity from the `agentPreset` session projection, not the header;
+//   * an agent-scoped `tools/post-execute` waterfall listener that bounds the
+//     current result's content before the batch settlement appends it to the
+//     `tool/result` history event (prior turns are never mutated).
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { apply, internal, name as pluginName, inject } from './index.js'
+
+const SOURCE = readFileSync(new URL('./index.js', import.meta.url), 'utf8')
 
 let passed = 0
 const failures = []
@@ -114,6 +120,7 @@ function makeAgent({ id, preset, depth = 0, parent, host, restrictThrows = false
   const restricted = []
   const sections = []
   const agentGuards = []
+  const postHooks = []
   const agentTools = {
     view: host.tools.view,
     definitions: host.tools.definitions,
@@ -140,6 +147,13 @@ function makeAgent({ id, preset, depth = 0, parent, host, restrictThrows = false
     session: { id, header },
     ctx: {
       tools: agentTools,
+      on(event, listener) {
+        if (event === 'tools/post-execute') postHooks.push(listener)
+        return () => {
+          const index = postHooks.indexOf(listener)
+          if (index >= 0) postHooks.splice(index, 1)
+        }
+      },
       systemPrompt: {
         section(section) {
           sections.push(section)
@@ -148,7 +162,7 @@ function makeAgent({ id, preset, depth = 0, parent, host, restrictThrows = false
       },
     },
   }
-  return { agent, restricted, sections, agentGuards }
+  return { agent, restricted, sections, agentGuards, postHooks }
 }
 
 const emitCreated = (host, agent) => {
@@ -188,7 +202,7 @@ const emitPresetSelected = (host, sessionId, preset) => {
 {
   const host = makeHost()
   apply(host, { dumpRoster: false, diagnostics: false })
-  const { agent, restricted, sections } = makeAgent({ id: 'main-1', preset: 'architect', host })
+  const { agent, restricted, sections, postHooks } = makeAgent({ id: 'main-1', preset: 'architect', host })
   emitCreated(host, agent)
 
   test('main restriction is applied through agent.ctx.tools (scoped context)', () => {
@@ -205,49 +219,67 @@ const emitPresetSelected = (host, sessionId, preset) => {
     for (const toolName of restricted[0].deny) assert.ok(KNOWN.includes(toolName), toolName)
   })
 
-  test('main gets the role contract system-prompt section', () => {
+  test('main gets the static ARCHITECT_CONTRACT section, mutually exclusive', () => {
     assert.equal(sections.length, 1)
     assert.equal(sections[0].name, 'architect:role-contract')
-    assert.match(sections[0].text, /ROLE CONTRACT/)
-    assert.match(sections[0].text, /BUDGET=cheap/)
+    assert.equal(sections[0].order, 2690)
+    assert.equal(sections[0].text, internal.ARCHITECT_CONTRACT)
+    assert.match(sections[0].text, /Delegation is your only action/)
+    assert.match(sections[0].text, /zero narration before tool calls/)
+    assert.match(sections[0].text, /prefer subagent over subagent_fork/i)
+    assert.equal(sections[0].text.includes('WORKER ROLE CONTRACT'), false)
+  })
+
+  test('main registers an agent-scoped tools/post-execute listener', () => {
+    assert.equal(postHooks.length, 1)
   })
 
   const guard = host.tools.state.guards[0]
 
-  test('untagged delegation from the architect main is rejected', () => {
-    assert.equal(guard({ name: 'subagent', arguments: { prompt: 'fix the bug' }, agent }), internal.DELEGATION_REJECT)
-    assert.equal(guard({ name: 'subagent_fork', arguments: { description: 'x' }, agent }), internal.DELEGATION_REJECT)
+  test('untagged subagent and subagent_fork delegations succeed unmodified', () => {
+    const args = { prompt: 'fix the bug' }
+    assert.equal(guard({ name: 'subagent', arguments: args, agent }), undefined)
+    assert.deepEqual(args, { prompt: 'fix the bug' })
+    assert.equal(guard({ name: 'subagent_fork', arguments: { description: 'x' }, agent }), undefined)
+    assert.equal(guard({ name: 'delegate', arguments: { task: 'y' }, agent }), undefined)
   })
 
-  test('tagged delegation is allowed and queues a worker budget', () => {
-    assert.equal(guard({ name: 'subagent', arguments: { prompt: 'BUDGET=heavy\nfix src/a.ts' }, agent }), undefined)
-    assert.equal(guard({ name: 'subagent', arguments: { budget: 'cheap', prompt: 'list files' }, agent }), undefined)
+  test('no BUDGET gate or per-role budget machinery remains', () => {
+    assert.doesNotMatch(SOURCE, /\bBUDGET\b/)
+    assert.doesNotMatch(SOURCE, /DELEGATION_REJECT|BUDGETS|budgetTag|delegationTag/)
+    assert.equal('BUDGETS' in internal, false)
+    assert.equal('DELEGATION_REJECT' in internal, false)
+    assert.equal('budgetTag' in internal, false)
+    assert.equal('delegationTag' in internal, false)
   })
 
   test('main file/shell tools are blocked by the guard even if schema restriction failed', () => {
     const reason = guard({ name: 'code_index', arguments: {}, agent })
     assert.match(reason, /ROLE VIOLATION/)
     assert.match(guard({ name: 'read', arguments: { path: 'x' }, agent }), /ROLE VIOLATION/)
+    assert.doesNotMatch(reason, /BUDGET/i)
   })
 
-  test('non-delegation architect calls are not otherwise blocked', () => {
-    assert.equal(guard({ name: 'todo_write', arguments: {}, agent }), undefined)
+  test('the architect/main role is never capped', () => {
+    for (let index = 0; index < 200; index += 1) {
+      assert.equal(guard({ name: 'todo_write', arguments: { index }, agent }), undefined)
+    }
     assert.equal(guard({ name: 'subagent_control', arguments: {}, agent }), undefined)
   })
 }
 
 // ---------------------------------------------------------------------------
-// lineage workers: keep file/shell tools, lose delegation, budget enforced
+// lineage workers: keep file/shell tools, lose delegation, one 120 ceiling
 // ---------------------------------------------------------------------------
 {
   const host = makeHost()
-  apply(host, { dumpRoster: false, diagnostics: false, cheapBudget: 30, heavyBudget: 60 })
+  apply(host, { dumpRoster: false, diagnostics: false })
   const { agent: main } = makeAgent({ id: 'main-2', preset: 'architect', host })
   emitCreated(host, main)
   const guard = host.tools.state.guards[0]
-  assert.equal(guard({ name: 'subagent', arguments: { prompt: 'BUDGET=cheap\nwork' }, agent: main }), undefined)
+  assert.equal(guard({ name: 'subagent', arguments: { prompt: 'untagged work' }, agent: main }), undefined)
 
-  const { agent: worker, sections } = makeAgent({
+  const { agent: worker, sections, postHooks } = makeAgent({
     id: 'worker-1',
     preset: 'architect',
     depth: 1,
@@ -262,7 +294,7 @@ const emitPresetSelected = (host, sessionId, preset) => {
   })
 
   test('a lineage worker cannot re-delegate', () => {
-    assert.match(guard({ name: 'subagent', arguments: { prompt: 'BUDGET=cheap\nx' }, agent: worker }), /NOT PERMITTED FOR WORKERS/)
+    assert.match(guard({ name: 'subagent', arguments: { prompt: 'untagged x' }, agent: worker }), /NOT PERMITTED FOR WORKERS/)
     assert.match(guard({ name: 'subagent_fork', arguments: {}, agent: worker }), /NOT PERMITTED FOR WORKERS/)
   })
 
@@ -272,20 +304,78 @@ const emitPresetSelected = (host, sessionId, preset) => {
     assert.match(guard({ name: 'send_message', arguments: {}, agent: worker }), /NOT PERMITTED FOR WORKERS/)
   })
 
-  test('worker budget counts down and hard-stops at the cheap cap (30)', () => {
-    let allowed = 3 // read, edit, pwsh above
-    while (allowed < 30) {
-      assert.equal(guard({ name: 'read', arguments: { path: `f${allowed}` }, agent: worker }), undefined)
-      allowed += 1
+  test('worker enforces exactly one flat 120-call ceiling and no 30/60 cap', () => {
+    assert.equal(internal.WORKER_CALL_CEILING, 120)
+    assert.doesNotMatch(SOURCE, /BUDGETS|cheapBudget|heavyBudget|30\/30|60\/60/)
+    let calls = 3 // the allowed read, edit, pwsh above
+    while (calls < 120) {
+      assert.equal(guard({ name: 'read', arguments: { path: `f${calls}` }, agent: worker }), undefined)
+      calls += 1
     }
-    const reason = guard({ name: 'read', arguments: { path: 'over' }, agent: worker })
-    assert.match(reason, /TOOL BUDGET EXHAUSTED \(30\/30\)/)
+    const first = guard({ name: 'read', arguments: { path: 'over' }, agent: worker })
+    const second = guard({ name: 'grep', arguments: { pattern: 'x' }, agent: worker })
+    assert.equal(first, internal.WORKER_CEILING_REASON)
+    assert.equal(second, first)
+    assert.match(first, /TOOL CALL CEILING REACHED/)
+    assert.match(first, /120-call/)
   })
 
-  test('worker role contract section is installed on agent/created', () => {
+  test('worker gets only the static WORKER_CONTRACT section, at a stable position', () => {
     emitCreated(host, worker)
     assert.equal(sections.length, 1)
-    assert.match(sections[0].text, /WORKER \(has file\/shell tools\)/)
+    assert.equal(sections[0].name, 'architect:role-contract')
+    assert.equal(sections[0].order, 2690)
+    assert.equal(sections[0].text, internal.WORKER_CONTRACT)
+    assert.match(sections[0].text, /frequent, small, targeted tool calls/)
+    assert.match(sections[0].text, /zero prose between tool calls/)
+    assert.equal(sections[0].text.includes('ARCHITECT ROLE CONTRACT'), false)
+    assert.equal(postHooks.length, 1)
+  })
+}
+
+// ---------------------------------------------------------------------------
+// prompt sections carry zero dynamic state
+// ---------------------------------------------------------------------------
+{
+  const build = ({ run, calls }) => {
+    const host = makeHost()
+    apply(host, { dumpRoster: false, diagnostics: false })
+    const main = makeAgent({ id: `${run}-main`, preset: 'architect', host })
+    emitCreated(host, main.agent)
+    const guard = host.tools.state.guards[0]
+    guard({ name: 'subagent', arguments: { prompt: 'untagged' }, agent: main.agent })
+    for (let index = 0; index < calls; index += 1) {
+      guard({ name: 'todo_write', arguments: { index }, agent: main.agent })
+    }
+    const worker = makeAgent({
+      id: `${run}-worker`,
+      preset: 'architect',
+      depth: 1,
+      parent: `session-${run}-main`,
+      host,
+    })
+    emitCreated(host, worker.agent)
+    for (let index = 0; index < calls; index += 1) {
+      guard({ name: 'read', arguments: { path: `f${index}` }, agent: worker.agent })
+    }
+    return { host, main, worker }
+  }
+
+  test('the same role prompt is byte-identical under differing session/call state', () => {
+    const cold = build({ run: 'cold', calls: 0 })
+    const hot = build({ run: 'hot', calls: 100 })
+    assert.equal(cold.main.sections.length, 1)
+    assert.equal(hot.main.sections.length, 1)
+    assert.equal(cold.worker.sections.length, 1)
+    assert.equal(hot.worker.sections.length, 1)
+    assert.equal(cold.main.sections[0].text, hot.main.sections[0].text)
+    assert.equal(cold.worker.sections[0].text, hot.worker.sections[0].text)
+    assert.equal(cold.main.sections[0].text, internal.ARCHITECT_CONTRACT)
+    assert.equal(hot.main.sections[0].text, internal.ARCHITECT_CONTRACT)
+    assert.equal(cold.worker.sections[0].text, internal.WORKER_CONTRACT)
+    assert.equal(hot.worker.sections[0].text, internal.WORKER_CONTRACT)
+    assert.equal(hot.worker.sections[0].text.includes('cold'), false)
+    assert.equal(hot.worker.sections[0].text.includes('hot'), false)
   })
 }
 
@@ -320,11 +410,13 @@ const emitPresetSelected = (host, sessionId, preset) => {
   const host = makeHost()
   apply(host, { dumpRoster: false, diagnostics: false })
   const guard = host.tools.state.guards[0]
-  const { agent: standard, restricted } = makeAgent({ id: 'std-1', preset: 'standard', host })
+  const { agent: standard, restricted, sections, postHooks } = makeAgent({ id: 'std-1', preset: 'standard', host })
   emitCreated(host, standard)
 
   test('a non-architect session is not restricted', () => {
     assert.equal(restricted.length, 0)
+    assert.equal(sections.length, 0)
+    assert.equal(postHooks.length, 0)
     assert.equal(guard({ name: 'subagent', arguments: { prompt: 'untagged is fine here' }, agent: standard }), undefined)
     assert.equal(guard({ name: 'code_index', arguments: {}, agent: standard }), undefined)
     assert.equal(guard({ name: 'read', arguments: {}, agent: standard }), undefined)
@@ -339,13 +431,14 @@ const emitPresetSelected = (host, sessionId, preset) => {
   const host = makeHost({ projections })
   apply(host, { dumpRoster: false, diagnostics: false })
   const guard = host.tools.state.guards[0]
-  const { agent, restricted, sections, agentGuards } = makeAgent({ id: 'session-optc-1', preset: 'ops-ptc', host })
+  const { agent, restricted, sections, agentGuards, postHooks } = makeAgent({ id: 'session-optc-1', preset: 'ops-ptc', host })
   emitCreated(host, agent)
 
   test('a session created under ops-ptc is left untouched (role other)', () => {
     assert.equal(restricted.length, 0)
     assert.equal(sections.length, 0)
     assert.equal(agentGuards.length, 0)
+    assert.equal(postHooks.length, 0)
     assert.equal(guard({ name: 'subagent', arguments: { prompt: 'untagged' }, agent }), undefined)
     assert.equal(guard({ name: 'code_index', arguments: {}, agent }), undefined)
   })
@@ -355,12 +448,14 @@ const emitPresetSelected = (host, sessionId, preset) => {
   projections.set('session-optc-1', 'architect')
   emitPresetSelected(host, 'session-optc-1', 'architect')
 
-  test('switching ops-ptc -> architect re-applies restrict() and the role contract', () => {
+  test('switching ops-ptc -> architect re-applies restrict() and ARCHITECT_CONTRACT', () => {
     assert.equal(restricted.length, 1)
     assert.ok(restricted[0].deny.includes('pwsh'))
     assert.ok(restricted[0].deny.includes('read'))
     assert.equal(sections.length, 1)
-    assert.match(sections[0].text, /BUDGET=cheap/)
+    assert.equal(sections[0].text, internal.ARCHITECT_CONTRACT)
+    assert.equal(sections[0].name, 'architect:role-contract')
+    assert.equal(postHooks.length, 1)
   })
 
   test('the switch installs an agent-scoped enforcement guard (realm-safe)', () => {
@@ -375,8 +470,8 @@ const emitPresetSelected = (host, sessionId, preset) => {
     assert.match(guard({ name: 'read', arguments: { path: 'x' }, agent }), /ROLE VIOLATION/)
   })
 
-  test('after the switch an untagged delegation is rejected', () => {
-    assert.equal(guard({ name: 'subagent', arguments: { prompt: 'survey the repo' }, agent }), internal.DELEGATION_REJECT)
+  test('after the switch an untagged delegation still succeeds (no BUDGET gate)', () => {
+    assert.equal(guard({ name: 'subagent', arguments: { prompt: 'survey the repo' }, agent }), undefined)
   })
 
   test('the other cache is gone: the projection now reads architect', () => {
@@ -391,7 +486,7 @@ const emitPresetSelected = (host, sessionId, preset) => {
   const host = makeHost({ projections })
   apply(host, { dumpRoster: false, diagnostics: false })
   const guard = host.tools.state.guards[0]
-  const { agent, restricted, agentGuards } = makeAgent({ id: 'session-optc-2', preset: 'ops-ptc', host })
+  const { agent, restricted, agentGuards, sections } = makeAgent({ id: 'session-optc-2', preset: 'ops-ptc', host })
   emitCreated(host, agent)
   assert.equal(guard({ name: 'code_index', arguments: {}, agent }), undefined)
 
@@ -400,6 +495,8 @@ const emitPresetSelected = (host, sessionId, preset) => {
     assert.match(guard({ name: 'code_index', arguments: {}, agent }), /ROLE VIOLATION/)
     assert.equal(restricted.length, 1)
     assert.equal(agentGuards.length, 1)
+    assert.equal(sections.length, 1)
+    assert.equal(sections[0].text, internal.ARCHITECT_CONTRACT)
   })
 }
 
@@ -421,6 +518,42 @@ const emitPresetSelected = (host, sessionId, preset) => {
 }
 
 // ---------------------------------------------------------------------------
+// current-result truncation before history (tools/post-execute)
+// ---------------------------------------------------------------------------
+{
+  const host = makeHost()
+  apply(host, { dumpRoster: false, diagnostics: false })
+  const { agent, postHooks } = makeAgent({ id: 'grow-1', preset: 'architect', host })
+  emitCreated(host, agent)
+  const listener = postHooks[0]
+  const exec = { name: 'read', callId: 'call-1' }
+  const largeText = `HEAD${'x'.repeat(20000)}TAIL`
+
+  test('an oversized text result is head+tail truncated by the post-execute hook', () => {
+    const decision = listener(exec, { content: [{ type: 'text', text: largeText }] }, () => ({ kind: 'accept' }))
+    assert.equal(decision.kind, 'accept')
+    assert.equal(decision.content.length, 1)
+    const text = decision.content[0].text
+    assert.ok(Buffer.byteLength(text) < internal.MAX_RESULT_BYTES)
+    assert.match(text, /\[\.\.\. TRUNCATED \d+ of 20008 bytes of this tool result; head and tail preserved \.\.\.\]/)
+    assert.ok(text.startsWith(largeText.slice(0, 100)))
+    assert.ok(text.endsWith(largeText.slice(-100)))
+  })
+
+  test('a result under 10 KB and a block decision pass through untouched', () => {
+    const small = { content: [{ type: 'text', text: 'small output' }] }
+    assert.deepEqual(listener(exec, small, () => ({ kind: 'accept' })), { kind: 'accept' })
+    const blocked = { kind: 'block', feedback: [{ type: 'text', text: 'no' }] }
+    assert.equal(listener(exec, small, () => blocked), blocked)
+  })
+
+  test('non-text content is left intact rather than corrupted', () => {
+    const image = { content: [{ type: 'image', data: 'a'.repeat(20000) }] }
+    assert.deepEqual(listener(exec, image, () => ({ kind: 'accept' })), { kind: 'accept' })
+  })
+}
+
+// ---------------------------------------------------------------------------
 // failure containment + disposal
 // ---------------------------------------------------------------------------
 {
@@ -432,6 +565,7 @@ const emitPresetSelected = (host, sessionId, preset) => {
   test('a throwing restrict() is contained and logged, never fatal', () => {
     assert.ok(host.warns.some((message) => message.includes('restrict failed')))
     assert.equal(sections.length, 1)
+    assert.equal(sections[0].text, internal.ARCHITECT_CONTRACT)
   })
 
   test('agent/disposed tears down without throwing', () => {
@@ -441,7 +575,7 @@ const emitPresetSelected = (host, sessionId, preset) => {
 }
 
 // ---------------------------------------------------------------------------
-// budget queue saturation
+// delegation queue saturation
 // ---------------------------------------------------------------------------
 {
   const host = makeHost()
@@ -452,24 +586,32 @@ const emitPresetSelected = (host, sessionId, preset) => {
 
   test(`delegation queue is capped at ${internal.MAX_PENDING} pending workers`, () => {
     for (let index = 0; index < internal.MAX_PENDING; index += 1) {
-      assert.equal(guard({ name: 'subagent', arguments: { prompt: 'BUDGET=cheap\nx' }, agent }), undefined)
+      assert.equal(guard({ name: 'subagent', arguments: { prompt: 'untagged x' }, agent }), undefined)
     }
-    assert.equal(guard({ name: 'subagent', arguments: { prompt: 'BUDGET=cheap\ny' }, agent }), internal.DELEGATION_BUSY)
+    assert.equal(guard({ name: 'subagent', arguments: { prompt: 'untagged y' }, agent }), internal.DELEGATION_BUSY)
   })
 }
 
 // ---------------------------------------------------------------------------
 // pure helpers
 // ---------------------------------------------------------------------------
-test('budget tags parse from prompts, brackets and argument fields', () => {
-  assert.equal(internal.budgetTag('BUDGET=cheap\nfix'), 'cheap')
-  assert.equal(internal.budgetTag('budget : HEAVY probe'), 'heavy')
-  assert.equal(internal.budgetTag('please run [cheap] now'), 'cheap')
-  assert.equal(internal.budgetTag('heavy: refactor'), 'heavy')
-  assert.equal(internal.budgetTag('no tag here'), undefined)
-  assert.equal(internal.delegationTag({ budget: 'HEAVY' }), 'heavy')
-  assert.equal(internal.delegationTag({ prompt: 'BUDGET=cheap\nx' }), 'cheap')
-  assert.equal(internal.delegationTag({ prompt: 'plain' }), undefined)
+test('the 120-call ceiling reason is one static string', () => {
+  assert.equal(internal.WORKER_CALL_CEILING, 120)
+  assert.equal(typeof internal.WORKER_CEILING_REASON, 'string')
+  assert.equal(internal.WORKER_CEILING_REASON.includes('${'), false)
+  assert.match(internal.WORKER_CEILING_REASON, /120-call/)
+})
+
+test('head+tail truncation keeps the marker and both ends', () => {
+  assert.equal(internal.truncatedToolResultContent([{ type: 'text', text: 'tiny' }]), undefined)
+  const text = `${'h'.repeat(9000)}BODY${'t'.repeat(9000)}`
+  const truncated = internal.truncatedToolResultContent([{ type: 'text', text }])
+  assert.equal(truncated.length, 1)
+  assert.equal(truncated[0].type, 'text')
+  assert.ok(Buffer.byteLength(truncated[0].text) < internal.MAX_RESULT_BYTES)
+  assert.ok(truncated[0].text.startsWith('h'.repeat(100)))
+  assert.ok(truncated[0].text.endsWith('t'.repeat(100)))
+  assert.match(truncated[0].text, /TRUNCATED/)
 })
 
 test('lineage detection uses depth and parentSession only', () => {

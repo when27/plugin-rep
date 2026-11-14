@@ -29,10 +29,10 @@ locally patched `dsh-tier-router` build, the patch files that produced it, and t
 | `profiles/desktop/compatibility.json` | Extra compatibility pin: `{"dsh-tier-router@0.6.0": ["0.2.2-rc.1"]}`. |
 | `profiles/desktop/settings/` | **Absent on the source machine** — there were no separate text settings files; all text config lived directly in the profile root and is captured above. |
 | `profiles/global/agent_rules.md` | Master/subagent operating rules (human-readable copy of the runtime `MEMORY.md` rules). DSH does **not** auto-load this path; it exists so the rules are reviewable/versioned. |
-| `presets/architect-preset/index.js` | The `architect-tool-restrict` Cordis plugin (733 lines): deny lists, delegation budget enforcement, role-contract injection. Tracks absolute `ROSTER_DUMP`/`DIAG_DUMP` paths used only for diagnostics — adjust or ignore them. |
+| `presets/architect-preset/index.js` | The `architect-tool-restrict` Cordis plugin (771 lines): deny lists, static `ARCHITECT_CONTRACT`/`WORKER_CONTRACT` injection, the `WORKER_CALL_CEILING = 120` worker safety ceiling, and agent-scoped `tools/post-execute` result truncation. Tracks absolute `ROSTER_DUMP`/`DIAG_DUMP` paths used only for diagnostics — adjust or ignore them. |
 | `presets/architect-preset/cordis.patch.yml` | Defines the preset itself: `preset-architect` row (`@deepseek-ai/dsh-agent-preset`, config `id: architect`, `order: 20`) and its plugin rows. |
 | `presets/architect-preset/package.json` | Package `@local/dsh-architect-preset` (private, ESM) with `dsh.bundle.patch: ./cordis.patch.yml`. |
-| `presets/architect-preset/smoke.test.mjs` | 32-test smoke suite for the restriction plugin; Node built-ins only, no dependencies. |
+| `presets/architect-preset/smoke.test.mjs` | 38-check smoke suite for the restriction plugin; Node built-ins only, no dependencies. |
 | `plugins/usage-popup/src/index.tsx` | Client half of the token-usage popup: composer HUD with per-session token usage, model/balance ledger, draggable HUD position. |
 | `plugins/usage-popup/scripts/build.mjs` | Tranpiles `src/index.tsx` with the TypeScript compiler API into `dist/index.js` + `dist/client.js` (`npm run build`). |
 | `plugins/usage-popup/cordis.patch.yml` | Bundle patch: inserts row `usage-popup` (name `usage-popup`). |
@@ -64,10 +64,8 @@ The preset splits one job across two roles, enforced by the restriction plugin
 
 **ARCHITECT (main agent — no file/shell tools; delegation is its only action):**
 
-- Start **every** subagent prompt with `BUDGET=cheap` or `BUDGET=heavy` on its own line.
-  - `BUDGET=cheap` — hard cap **30** worker tool calls (lookups, one-file edits, short commands).
-  - `BUDGET=heavy` — hard cap **60** worker tool calls (multi-file work or real debugging only).
-- Untagged delegations are rejected by the harness; denied tools cannot be called.
+- Delegate with untagged `subagent` / `subagent_fork` calls: plain calls, no budget tag.
+  The old cheap/heavy budget tiers were removed, so delegation is never tagged.
 - Name exact files/paths and exact commands, and state the required output.
 - Add: "Do not explore beyond this list; no broad searches, no unrelated tests."
 - Never ask a worker to investigate, explore, find out, or survey the repo.
@@ -76,7 +74,9 @@ The preset splits one job across two roles, enforced by the restriction plugin
 
 **WORKER (subagent — has file/shell tools; stays strictly inside the assigned task):**
 
-- The harness hard-caps it at **30** (cheap) or **60** (heavy) tool calls; tools stop after the cap.
+- A flat 120-tool-call safety ceiling applies per worker (`WORKER_CALL_CEILING = 120`),
+  enforced in code as a runaway-loop backstop; the architect/main agent is uncapped.
+  It is a safety limit, not a budget tier.
 - Read only named files or unambiguously required ones; at most one discovery call.
 - No `code_map`/`code_index`, repo-wide grep/glob, or unrelated tests.
 - No plans, todos, documents, or subagents.
@@ -88,8 +88,26 @@ The plugin blocks file/shell/inspection tools for the **main** agent (`read`, `w
 `edit`, `apply_patch`, `grep`, `glob`, `bash`/`pwsh`, `code_map`, `workflow`, ...) and
 blocks delegation/management tools for **workers** (`subagent`, `subagent_fork`,
 `todo_write`, `list_agents`, `send_message`, memory-document/management tools, ...).
-It also enforces the budget tag on delegation, caps the pending delegation queue at 16,
-and fails all tools with `TOOL BUDGET EXHAUSTED` when a worker exceeds its cap.
+It also caps the pending delegation queue at 16 and blocks all tools once a worker
+reaches the ceiling.
+
+### Cache-optimized preset architecture
+
+Each role gets one fixed, byte-stable prompt prefix: the plugin injects a static
+`ARCHITECT_CONTRACT` or `WORKER_CONTRACT` section per role (section
+`architect:role-contract`, order 2690) instead of per-run text. A worker's prefix changes
+only if its role changes, which keeps DeepSeek prefix caching effective.
+
+- **Untagged delegation.** `subagent` / `subagent_fork` are plain calls with no budget
+  tag and no cheap/heavy tier selection; the former budget-tier rules are gone.
+- **Worker safety ceiling.** `WORKER_CALL_CEILING = 120` tool calls per worker, enforced
+  in code as a runaway-loop backstop; architect/main is uncapped; it is not a budget tier.
+- **Static contract split.** `ARCHITECT_CONTRACT` / `WORKER_CONTRACT` are injected per
+  role with no per-run interpolation, keeping the prompt prefix stable and cache-friendly.
+- **Agent-scoped `tools/post-execute` truncation.** Text tool results larger than
+  `10240` bytes (10 KB) are reduced to ~4 KB head + ~4 KB tail (4096 + 4096) plus a
+  truncation marker before they enter history. Only the current result is changed, never
+  prior turns, and structured non-text content is left intact.
 
 ### How it is mounted and configured
 
@@ -256,11 +274,12 @@ and fails all tools with `TOOL BUDGET EXHAUSTED` when a worker exceeds its cap.
    No profile config change is needed.
 8. **Restart DSH fully and open a new session.** Verify the session reports the
    Architect preset and that the main agent has no file/shell tools; delegated prompts
-   must start with `BUDGET=cheap` or `BUDGET=heavy`.
+   are plain untagged `subagent`/`subagent_fork` calls (the former budget tiers were
+   removed).
 9. **Optionally verify the preset plugin:**
 
    ```bash
-   node presets/architect-preset/smoke.test.mjs   # exit 0, 32 pass, 0 fail
+   node presets/architect-preset/smoke.test.mjs   # exit 0, 38 pass, 0 fail
    ```
 
 ## Required caveats
@@ -304,7 +323,7 @@ and fails all tools with `TOOL BUDGET EXHAUSTED` when a worker exceeds its cap.
 
 ## Verification performed for this export
 
-- `node presets/architect-preset/smoke.test.mjs` → **exit 0, 32 pass, 0 fail**
+- `node presets/architect-preset/smoke.test.mjs` → **exit 0, 38 pass, 0 fail**
   (same result in the original workspace at `architect-preset/smoke.test.mjs`).
 - Staged working tree: **244 files, 2,711,164 bytes**; `skills/modern-web-guidance/SKILL.md`
   and this `README.md` present; no `node_modules`, `.git`, logs, crash dumps, `*.diag.json`,

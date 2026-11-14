@@ -62,9 +62,17 @@ const WORKER_DENY = [
 ]
 
 const DELEGATION_TOOLS = new Set(['subagent', 'subagent_fork', 'delegate'])
-const BUDGETS = { cheap: 30, heavy: 60 }
 const PENDING_TTL_MS = 5 * 60 * 1000
 const MAX_PENDING = 16
+// One flat runaway-loop ceiling for every worker-role agent. The count is
+// enforced from this module's memory and is never interpolated into prompt
+// text or tool schemas.
+const WORKER_CALL_CEILING = 120
+// Oversized tool results are head+tail truncated in the `tools/post-execute`
+// waterfall, i.e. after execution but before they are committed to history.
+const MAX_RESULT_BYTES = 10240
+const RESULT_HEAD_BYTES = 4096
+const RESULT_TAIL_BYTES = 4096
 
 const ROSTER_DUMP =
   'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/architect-preset/.roster.json'
@@ -73,42 +81,51 @@ const DIAG_DUMP =
 
 const MAIN_DENY_REASON = (toolName) =>
   `ROLE VIOLATION: the Architect main agent has no file/shell/inspection tools. ` +
-  `"${toolName}" is blocked. Delegate this work with a first line ` +
-  'BUDGET=cheap (<=30 worker tool calls) or BUDGET=heavy (<=60).'
+  `"${toolName}" is blocked. Delegate this work to a subagent with the exact paths, ` +
+  'exact commands, and the required output.'
 
 const WORKER_DENY_REASON = (toolName) =>
   `NOT PERMITTED FOR WORKERS: "${toolName}" is reserved for the Architect main agent. ` +
   'Do not delegate, plan, write documents, or call management tools. Finish the assigned ' +
-  'task with file/shell tools and return a <=20 line report.'
+  'task with file/shell tools and return a compact completion receipt.'
 
-const ROLE_CONTRACT = [
-  'ROLE CONTRACT — apply only the half that matches your role.',
+// Two disjoint static role contracts. Each agent receives exactly the section
+// for its role, so every role's system prompt is a fixed byte string and the
+// prefix cache is only invalidated by a role change, never by call counts or
+// session identity.
+const ARCHITECT_CONTRACT = [
+  'ARCHITECT ROLE CONTRACT — the main agent has no file, shell, or repo-index tools.',
   '',
-  'ARCHITECT (no file/shell tools): delegation is your only action.',
-  '- Start EVERY subagent prompt with BUDGET=cheap or BUDGET=heavy on its own line.',
-  '  BUDGET=cheap = hard cap 30 worker tool calls (lookups, one-file edits, short commands).',
-  '  BUDGET=heavy = hard cap 60 worker tool calls (multi-file work or real debugging only).',
-  '- Untagged delegations are rejected by the harness, and denied tools cannot be called.',
-  '- Name exact files/paths and exact commands, and state the required output.',
-  '- Add: "Do not explore beyond this list; no broad searches, no unrelated tests."',
-  '- Never ask a worker to investigate, explore, find out, or survey the repo.',
-  '- Use the fewest workers; never re-delegate failed work; reuse results.',
-  '- Ask for a <=20-line report: result, files changed, verification, blockers.',
-  '',
-  'WORKER (has file/shell tools): stay strictly inside the assigned task.',
-  '- The harness hard-caps you at 30 (cheap) or 60 (heavy) tool calls; tools stop after the cap.',
-  '- Read only files named in the task or unambiguously required; at most one discovery call.',
-  '- No code_map, no code_index, no repo-wide grep/glob, no unrelated tests.',
-  '- No plans, todos, documents, or subagents.',
-  '- Prefer one precise command over many. Stop as soon as the task is complete.',
-  '- Return <=20 lines: result, files changed, verification, blockers/remaining.',
-  '- If blocked or ambiguous, stop and report immediately; do not guess or explore.',
+  '- Delegation is your only action: call subagent (or subagent_fork) with a complete brief.',
+  '- Name the exact files/paths, exact commands, and the verification criteria; state the',
+  '  required output. Do not write speculative code.',
+  '- Give each worker a closed list: "Do not explore beyond this list; no broad searches,',
+  '  no unrelated tests."',
+  '- Prefer subagent over subagent_fork unless the full conversation history is strictly',
+  '  needed: subagent gives each worker a clean, cache-friendly prefix.',
+  '- Emit zero narration before tool calls: call the tool directly.',
+  '- Keep the final response concise: result, files changed, verification, remaining risks.',
 ].join('\n')
 
-const DELEGATION_REJECT =
-  'DELEGATION REJECTED: missing budget tag. Resend this SAME task with a first line ' +
-  '"BUDGET=cheap" (<=30 worker tool calls) or "BUDGET=heavy" (<=60). Never explore; include ' +
-  'exact paths, exact commands, and the required output.'
+const WORKER_CONTRACT = [
+  'WORKER ROLE CONTRACT — stay strictly inside the assigned task.',
+  '',
+  '- Prefer frequent, small, targeted tool calls (glob, grep, line-ranged read, edit) over',
+  '  giant monolithic shell scripts.',
+  '- Emit zero prose between tool calls: call the next tool directly.',
+  '- Read only the files named in the task or unambiguously required; at most one discovery',
+  '  call. No code_map, no code_index, no repo-wide grep/glob, no unrelated tests.',
+  '- No plans, todos, documents, or subagents.',
+  '- Return only a compact completion receipt: files changed, commands with exit codes, and',
+  '  the verification outcome. Never paste full file contents.',
+  '- If blocked or ambiguous, stop and report immediately; do not guess or explore.',
+  '- A per-worker runaway-loop safety call ceiling applies and is enforced in code.',
+].join('\n')
+
+const WORKER_CEILING_REASON =
+  'TOOL CALL CEILING REACHED: the 120-call runaway-loop safety ceiling is exhausted and all ' +
+  'tools are now blocked. Stop immediately and return your compact completion receipt: work ' +
+  'completed, exact files changed, commands with exit codes, verification, and blockers.'
 
 const DELEGATION_BUSY =
   'DELEGATION REJECTED: too many queued workers. Wait for the current workers to finish, or ' +
@@ -123,6 +140,81 @@ function warn(ctx, message) {
     ctx.logger?.warn?.(`architect-tool-restrict: ${message}`)
   } catch {
     // logging must never break agent creation or tool dispatch
+  }
+}
+
+/** Render text-block tool content for sizing; undefined when content is not all text. */
+function toolResultText(content) {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return undefined
+  const parts = []
+  for (const block of content) {
+    if (!block || typeof block !== 'object' || block.type !== 'text' || typeof block.text !== 'string') {
+      return undefined
+    }
+    parts.push(block.text)
+  }
+  return parts.join('\n')
+}
+
+/**
+ * Head+tail truncation for one oversized tool result. Only the result currently
+ * being committed changes: prior turns are already durable session history and
+ * are never rewritten. Structured (non-text) content is left intact rather than
+ * corrupted.
+ */
+function truncatedToolResultContent(content) {
+  const text = toolResultText(content)
+  if (text === undefined) return undefined
+  const buffer = Buffer.from(text, 'utf8')
+  if (buffer.length <= MAX_RESULT_BYTES) return undefined
+  const head = buffer.subarray(0, RESULT_HEAD_BYTES).toString('utf8')
+  const tail = buffer.subarray(buffer.length - RESULT_TAIL_BYTES).toString('utf8')
+  const omitted = buffer.length - RESULT_HEAD_BYTES - RESULT_TAIL_BYTES
+  const marker =
+    `\n\n[... TRUNCATED ${omitted} of ${buffer.length} bytes of this tool result; ` +
+    'head and tail preserved ...]\n\n'
+  return [{ type: 'text', text: `${head}${marker}${tail}` }]
+}
+
+/** Keep an accepted post-execute decision but bound its eventual history content. */
+function applyResultTruncation(decision, result) {
+  if (!decision || decision.kind !== 'accept') return decision
+  // A `value` replacement is re-materialized by the definition; leave it alone.
+  if (Object.hasOwn(decision, 'value')) return decision
+  try {
+    const content = Object.hasOwn(decision, 'content') ? decision.content : result?.content
+    const bounded = truncatedToolResultContent(content)
+    return bounded === undefined ? decision : { ...decision, content: bounded }
+  } catch {
+    // truncation is best-effort and must never break a tool result
+    return decision
+  }
+}
+
+/**
+ * Register the `tools/post-execute` waterfall listener for one agent. This is
+ * the only point where a result can be MUTATED/REPLACED before history: the
+ * accepted decision's `content` is what the batch settlement later appends as
+ * the `tool/result` session event. The listener is agent-scoped, so it sees only
+ * this agent's current result and never touches prior turns.
+ */
+function installResultTruncation(ctx, agent) {
+  const host = agent?.ctx
+  if (!host || typeof host.on !== 'function') return []
+  const listener = (exec, result, next) => {
+    const downstream = typeof next === 'function' ? next() : { kind: 'accept' }
+    if (downstream && typeof downstream.then === 'function') {
+      return downstream.then((decision) => applyResultTruncation(decision, result))
+    }
+    return applyResultTruncation(downstream, result)
+  }
+  try {
+    const dispose = host.on('tools/post-execute', listener)
+    return typeof dispose === 'function' ? [dispose] : []
+  } catch (error) {
+    warn(ctx, `post-execute hook failed: ${errorMessage(error)}`)
+    return []
   }
 }
 
@@ -174,7 +266,7 @@ function presetOf(ctx, agent) {
 // the immutable session header records `parentSession` and a non-zero
 // `delegationDepth` for every subagent, while a top-level main session has
 // neither. This keeps the file/shell DENY list structurally main-only even if
-// the delegation budget queue is empty or out of order.
+// the delegation queue is empty or out of order.
 function isSubagent(agent) {
   const header = agent?.session?.header
   const meta = agent?.session?.meta
@@ -186,55 +278,6 @@ function isSubagent(agent) {
 
 function normalizeId(value) {
   return typeof value === 'string' ? value.replace(/^session-/, '') : value
-}
-
-function limitOf(value, fallback) {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric) || numeric <= 0) return fallback
-  return Math.min(Math.floor(numeric), 200)
-}
-
-function parseArgs(args) {
-  if (args === undefined || args === null) return {}
-  if (typeof args !== 'object') {
-    try {
-      return JSON.parse(String(args))
-    } catch {
-      return {}
-    }
-  }
-  return args
-}
-
-function argsText(args) {
-  const parts = []
-  for (const key of ['budget', 'prompt', 'description', 'task']) {
-    const value = args?.[key]
-    if (typeof value === 'string' && value.length > 0) parts.push(value)
-  }
-  return parts.join('\n')
-}
-
-function budgetTag(text) {
-  if (typeof text !== 'string' || text.length === 0) return undefined
-  const patterns = [
-    /\bBUDGET\s*[=:]\s*(cheap|heavy)\b/i,
-    /\[\s*(?:budget\s*[=:]\s*)?(cheap|heavy)\s*\]/i,
-    /^\s*(cheap|heavy)\s*[:;-]/i,
-  ]
-  for (const pattern of patterns) {
-    const match = pattern.exec(text)
-    if (match) return match[1].toLowerCase()
-  }
-  return undefined
-}
-
-function delegationTag(args) {
-  const direct = args?.budget
-  if (typeof direct === 'string' && /^(cheap|heavy)$/i.test(direct.trim())) {
-    return direct.trim().toLowerCase()
-  }
-  return budgetTag(argsText(args))
 }
 
 /**
@@ -298,14 +341,6 @@ function addSection(ctx, agent, section) {
   }
 }
 
-function exhaustedMessage(limit) {
-  return (
-    `TOOL BUDGET EXHAUSTED (${limit}/${limit}). All tools are now blocked. Stop immediately ` +
-    'and return your final answer: work completed, exact files changed, verification, and ' +
-    'remaining work or blockers.'
-  )
-}
-
 function toolsOf(ctx) {
   try {
     const tools =
@@ -344,12 +379,11 @@ function installGlobalGuard(ctx, guard) {
 export function apply(ctx, config) {
   if (config?.dumpRoster !== false) setTimeout(() => void dumpRoster(ctx), 5000)
 
-  const cheap = limitOf(config?.cheapBudget ?? config?.budgets?.cheap, BUDGETS.cheap)
-  const heavy = limitOf(config?.heavyBudget ?? config?.budgets?.heavy, BUDGETS.heavy)
   const diagnostics = config?.diagnostics !== false
 
   const pending = []
   const states = new Map()
+  const workerCalls = new Map()
   const parentOf = new Map()
   const architectIds = new Set()
   const disposers = new Map()
@@ -432,15 +466,9 @@ export function apply(ctx, config) {
       if (!lineage) {
         state = { role: 'other', preset }
       } else {
-        const entry = takePending()
-        const budget = entry?.budget ?? 'cheap'
-        state = {
-          role: 'worker',
-          preset,
-          budget,
-          calls: 0,
-          limit: budget === 'heavy' ? heavy : cheap,
-        }
+        // Release the delegation slot the architect queued for this worker.
+        takePending()
+        state = { role: 'worker', preset }
       }
     } else if (preset === 'architect') {
       architectIds.add(key)
@@ -455,7 +483,6 @@ export function apply(ctx, config) {
         id: String(key),
         role: state.role,
         preset: preset ?? null,
-        budget: state.budget ?? null,
       })
       if (diag.guard.length > 25) diag.guard.shift()
       flushDiag()
@@ -482,7 +509,7 @@ export function apply(ctx, config) {
   // Guard registration is idempotent per execution object: the same guard can
   // live in the root layer AND in the agent's own scope (defense in depth), and
   // checkGuards() must not queue one delegation twice or double-charge a
-  // worker's budget.
+  // worker's call count.
   const seen = new WeakSet()
 
   // Global enforcement: identical decisions to the per-agent setup below,
@@ -505,10 +532,9 @@ export function apply(ctx, config) {
 
       if (state.role === 'main') {
         if (DELEGATION_TOOLS.has(toolName)) {
-          const tag = delegationTag(parseArgs(exec.arguments))
-          if (!tag) return DELEGATION_REJECT
+          // Untagged delegations are valid; only the outstanding queue is bounded.
           if (pending.length >= MAX_PENDING) return DELEGATION_BUSY
-          pending.push({ budget: tag, at: Date.now() })
+          pending.push({ at: Date.now() })
           return undefined
         }
         if (DENY.includes(toolName)) return MAIN_DENY_REASON(toolName)
@@ -516,8 +542,12 @@ export function apply(ctx, config) {
       }
 
       if (WORKER_DENY.includes(toolName)) return WORKER_DENY_REASON(toolName)
-      if (state.calls >= state.limit) return exhaustedMessage(state.limit)
-      state.calls += 1
+      // The main role is never capped; one flat 120-call runaway-loop ceiling
+      // applies to every worker-role agent, keyed by its session id in memory.
+      const agentKey = normalizeId(agent?.id ?? agent)
+      const calls = workerCalls.get(agentKey) ?? 0
+      if (calls >= WORKER_CALL_CEILING) return WORKER_CEILING_REASON
+      workerCalls.set(agentKey, calls + 1)
       return undefined
     } catch (error) {
       warn(ctx, `delegation guard failed: ${errorMessage(error)}`)
@@ -563,12 +593,17 @@ export function apply(ctx, config) {
       // Schema-level narrowing (what the model can see). `agent.ctx.tools` is
       // the only context DSH accepts for `restrict()`.
       const restrictions = restrictTools(ctx, agent, names)
+      // Exactly one static role contract goes into the deterministic section
+      // position, so each role's prompt prefix is fixed and role-specific.
       const sections = addSection(ctx, agent, {
         name: 'architect:role-contract',
         order: 2690,
-        text: ROLE_CONTRACT,
+        text: state.role === 'main' ? ARCHITECT_CONTRACT : WORKER_CONTRACT,
       })
-      const list = [...scopedGuards, ...restrictions, ...sections]
+      // Post-execute truncation: the only pre-history mutation point. It runs on
+      // this agent's current result only, never on already committed turns.
+      const postExecute = installResultTruncation(ctx, agent)
+      const list = [...scopedGuards, ...restrictions, ...sections, ...postExecute]
       disposers.set(key, list)
       if (diag) {
         diag.setups.push({
@@ -702,6 +737,7 @@ export function apply(ctx, config) {
           flushDiag()
         }
         states.delete(key)
+        workerCalls.delete(key)
         teardown(key)
       } catch {
         // disposal must never break agent teardown
@@ -718,9 +754,11 @@ export function apply(ctx, config) {
 export const internal = {
   DENY,
   WORKER_DENY,
-  BUDGETS,
-  budgetTag,
-  delegationTag,
+  ARCHITECT_CONTRACT,
+  WORKER_CONTRACT,
+  WORKER_CALL_CEILING,
+  WORKER_CEILING_REASON,
+  MAX_RESULT_BYTES,
   isSubagent,
   normalizeId,
   presetOf,
@@ -728,6 +766,6 @@ export const internal = {
   MAX_PENDING,
   MAIN_DENY_REASON,
   WORKER_DENY_REASON,
-  DELEGATION_REJECT,
   DELEGATION_BUSY,
+  truncatedToolResultContent,
 }
