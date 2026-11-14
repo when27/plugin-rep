@@ -24,6 +24,36 @@
       "preset": "architect",
       "subagent": true,
       "at": "2026-11-14T18:28:50.070Z"
+    },
+    {
+      "id": "session-01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "preset": "architect",
+      "subagent": false,
+      "at": "2026-11-14T19:44:28.111Z"
+    },
+    {
+      "id": "529e9d44-38cc-4e43-9f5c-a25d9f7e844a",
+      "preset": "architect",
+      "subagent": true,
+      "at": "2026-11-14T19:46:07.436Z"
+    },
+    {
+      "id": "5886e1d0-cdb5-4eb8-9ba5-05391eaab3cd",
+      "preset": "architect",
+      "subagent": true,
+      "at": "2026-11-14T19:47:13.415Z"
+    },
+    {
+      "id": "88a5f785-94b8-499f-8adc-d9697eaddd02",
+      "preset": "architect",
+      "subagent": true,
+      "at": "2026-11-14T19:47:43.152Z"
+    },
+    {
+      "id": "mnemon-run-v1-150b150b-b0f4-4a3b-a308-6f8dba68e86d",
+      "preset": "architect",
+      "subagent": true,
+      "at": "2026-11-14T19:48:34.056Z"
     }
   ],
   "guard": [
@@ -64,6 +94,31 @@
     },
     {
       "id": "mnemon-run-v1-084f956b-b841-43fb-8cfe-05db7fe94f1f",
+      "role": "worker",
+      "preset": "architect"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "preset": "architect"
+    },
+    {
+      "id": "529e9d44-38cc-4e43-9f5c-a25d9f7e844a",
+      "role": "worker",
+      "preset": "architect"
+    },
+    {
+      "id": "5886e1d0-cdb5-4eb8-9ba5-05391eaab3cd",
+      "role": "worker",
+      "preset": "architect"
+    },
+    {
+      "id": "88a5f785-94b8-499f-8adc-d9697eaddd02",
+      "role": "worker",
+      "preset": "architect"
+    },
+    {
+      "id": "mnemon-run-v1-150b150b-b0f4-4a3b-a308-6f8dba68e86d",
       "role": "worker",
       "preset": "architect"
     }
@@ -143,142 +198,229 @@
       "restrictions": 1,
       "sections": 1,
       "at": "2026-11-14T18:28:50.050Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "preset": "architect",
+      "guards": 1,
+      "restrictions": 1,
+      "sections": 1,
+      "at": "2026-11-14T19:44:28.121Z"
+    },
+    {
+      "id": "529e9d44-38cc-4e43-9f5c-a25d9f7e844a",
+      "role": "worker",
+      "preset": "architect",
+      "guards": 1,
+      "restrictions": 1,
+      "sections": 1,
+      "at": "2026-11-14T19:46:07.445Z"
+    },
+    {
+      "id": "5886e1d0-cdb5-4eb8-9ba5-05391eaab3cd",
+      "role": "worker",
+      "preset": "architect",
+      "guards": 1,
+      "restrictions": 1,
+      "sections": 1,
+      "at": "2026-11-14T19:47:13.422Z"
+    },
+    {
+      "id": "88a5f785-94b8-499f-8adc-d9697eaddd02",
+      "role": "worker",
+      "preset": "architect",
+      "guards": 1,
+      "restrictions": 1,
+      "sections": 1,
+      "at": "2026-11-14T19:47:43.158Z"
+    },
+    {
+      "id": "mnemon-run-v1-150b150b-b0f4-4a3b-a308-6f8dba68e86d",
+      "role": "worker",
+      "preset": "architect",
+      "guards": 1,
+      "restrictions": 1,
+      "sections": 1,
+      "at": "2026-11-14T19:48:34.023Z"
     }
   ],
   "efforts": [
     {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "low",
-      "to": "high",
-      "at": "2026-11-14T18:26:26.205Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "low",
-      "to": "high",
-      "at": "2026-11-14T18:26:26.220Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "high",
-      "to": "high",
-      "at": "2026-11-14T18:26:29.013Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "high",
-      "to": "high",
-      "at": "2026-11-14T18:26:37.513Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "high",
-      "to": "high",
-      "at": "2026-11-14T18:26:37.514Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "high",
-      "to": "high",
-      "at": "2026-11-14T18:26:37.516Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "high",
-      "to": "high",
-      "at": "2026-11-14T18:26:37.566Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "high",
-      "to": "high",
-      "at": "2026-11-14T18:27:15.436Z"
-    },
-    {
-      "id": "cccfc5cb-aa05-4b0f-a67a-a7335f042ecc",
-      "role": "worker",
-      "from": "high",
-      "to": "low",
-      "at": "2026-11-14T18:27:15.453Z"
-    },
-    {
-      "id": "cccfc5cb-aa05-4b0f-a67a-a7335f042ecc",
-      "role": "worker",
-      "from": "high",
-      "to": "low",
-      "at": "2026-11-14T18:27:15.472Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
-      "role": "main",
-      "from": "high",
-      "to": "high",
-      "at": "2026-11-14T18:28:14.216Z"
-    },
-    {
-      "id": "cccfc5cb-aa05-4b0f-a67a-a7335f042ecc",
+      "id": "529e9d44-38cc-4e43-9f5c-a25d9f7e844a",
       "role": "worker",
       "from": "low",
       "to": "low",
-      "at": "2026-11-14T18:28:14.217Z"
+      "at": "2026-11-14T19:47:07.321Z"
     },
     {
       "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
       "role": "main",
       "from": "high",
       "to": "high",
-      "at": "2026-11-14T18:28:50.069Z"
+      "at": "2026-11-14T19:47:13.438Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:47:13.454Z"
+    },
+    {
+      "id": "5886e1d0-cdb5-4eb8-9ba5-05391eaab3cd",
+      "role": "worker",
+      "from": "high",
+      "to": "low",
+      "at": "2026-11-14T19:47:13.456Z"
+    },
+    {
+      "id": "5886e1d0-cdb5-4eb8-9ba5-05391eaab3cd",
+      "role": "worker",
+      "from": "high",
+      "to": "low",
+      "at": "2026-11-14T19:47:13.472Z"
     },
     {
       "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
       "role": "main",
       "from": "high",
       "to": "high",
-      "at": "2026-11-14T18:28:50.086Z"
+      "at": "2026-11-14T19:47:40.037Z"
     },
     {
-      "id": "mnemon-run-v1-084f956b-b841-43fb-8cfe-05db7fe94f1f",
-      "role": "worker",
-      "from": "high",
-      "to": "low",
-      "at": "2026-11-14T18:28:50.106Z"
-    },
-    {
-      "id": "mnemon-run-v1-084f956b-b841-43fb-8cfe-05db7fe94f1f",
-      "role": "worker",
-      "from": "high",
-      "to": "low",
-      "at": "2026-11-14T18:28:50.126Z"
-    },
-    {
-      "id": "mnemon-run-v1-084f956b-b841-43fb-8cfe-05db7fe94f1f",
-      "role": "worker",
-      "from": "high",
-      "to": "low",
-      "at": "2026-11-14T18:28:50.127Z"
-    },
-    {
-      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
       "role": "main",
       "from": "high",
       "to": "high",
-      "at": "2026-11-14T18:28:57.120Z"
+      "at": "2026-11-14T19:47:40.038Z"
     },
     {
-      "id": "mnemon-run-v1-084f956b-b841-43fb-8cfe-05db7fe94f1f",
+      "id": "5886e1d0-cdb5-4eb8-9ba5-05391eaab3cd",
       "role": "worker",
       "from": "low",
       "to": "low",
-      "at": "2026-11-14T18:28:57.121Z"
+      "at": "2026-11-14T19:47:40.040Z"
+    },
+    {
+      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:47:43.175Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:47:43.192Z"
+    },
+    {
+      "id": "88a5f785-94b8-499f-8adc-d9697eaddd02",
+      "role": "worker",
+      "from": "high",
+      "to": "low",
+      "at": "2026-11-14T19:47:43.194Z"
+    },
+    {
+      "id": "88a5f785-94b8-499f-8adc-d9697eaddd02",
+      "role": "worker",
+      "from": "high",
+      "to": "low",
+      "at": "2026-11-14T19:47:43.210Z"
+    },
+    {
+      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:47:58.588Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:47:58.589Z"
+    },
+    {
+      "id": "88a5f785-94b8-499f-8adc-d9697eaddd02",
+      "role": "worker",
+      "from": "low",
+      "to": "low",
+      "at": "2026-11-14T19:47:58.591Z"
+    },
+    {
+      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:48:34.037Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:48:34.039Z"
+    },
+    {
+      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:48:34.072Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:48:34.088Z"
+    },
+    {
+      "id": "mnemon-run-v1-150b150b-b0f4-4a3b-a308-6f8dba68e86d",
+      "role": "worker",
+      "from": "high",
+      "to": "low",
+      "at": "2026-11-14T19:48:34.090Z"
+    },
+    {
+      "id": "mnemon-run-v1-150b150b-b0f4-4a3b-a308-6f8dba68e86d",
+      "role": "worker",
+      "from": "high",
+      "to": "low",
+      "at": "2026-11-14T19:48:34.106Z"
+    },
+    {
+      "id": "mnemon-run-v1-150b150b-b0f4-4a3b-a308-6f8dba68e86d",
+      "role": "worker",
+      "from": "high",
+      "to": "low",
+      "at": "2026-11-14T19:48:34.107Z"
+    },
+    {
+      "id": "6ae24365-07c0-4a3e-8797-1f95f192cc89",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:48:36.598Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T19:48:36.599Z"
+    },
+    {
+      "id": "mnemon-run-v1-150b150b-b0f4-4a3b-a308-6f8dba68e86d",
+      "role": "worker",
+      "from": "low",
+      "to": "low",
+      "at": "2026-11-14T19:48:36.600Z"
     }
   ],
-  "disposals": 2
+  "disposals": 6
 }
