@@ -75,6 +75,19 @@ const MAX_RESULT_BYTES = 65536
 const RESULT_HEAD_BYTES = 24576
 const RESULT_TAIL_BYTES = 24576
 
+// Role -> reasoning effort, applied to the Agent's RECORDED model selection
+// (`agent.model.select()`) before its first step. DSH resolves the effort for a
+// request in `AgentLoop.preStep()` (`this.model.current()`) and then REQUIRES
+// the `agent/request` waterfall to leave `reasoningEffort` untouched (it throws
+// otherwise), so the selection must be corrected before step preparation.
+//
+// DeepSeek advertises exactly off | low | high | max; the wire API folds
+// `medium` into `high`, so `low` is the only native level that actually cuts
+// worker reasoning tokens while thinking stays enabled. `high` is the cap for
+// the Architect: `max` is never sent.
+const ARCHITECT_EFFORT = 'high'
+const WORKER_EFFORT = 'low'
+
 const ROSTER_DUMP =
   'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/architect-preset/.roster.json'
 const DIAG_DUMP =
@@ -275,6 +288,82 @@ function isSubagent(agent) {
   return typeof parent === 'string' && parent.length > 0
 }
 
+/**
+ * The reasoning effort this role must use, or undefined when the role has no
+ * opinion (any non-architect session). `other` deliberately returns undefined:
+ * the preset hook must leave Standard/OPTC sessions exactly as configured.
+ */
+function roleEffort(role) {
+  if (role === 'main') return ARCHITECT_EFFORT
+  if (role === 'worker') return WORKER_EFFORT
+  return undefined
+}
+
+/** Current recorded selection of an Agent (`agent.model.current()`). */
+function selectionOf(agent) {
+  try {
+    if (typeof agent?.model?.current === 'function') {
+      const current = agent.model.current()
+      if (current && typeof current.provider === 'string' && typeof current.model === 'string') {
+        return current
+      }
+    }
+  } catch {
+    // fall through to the creation options
+  }
+  const provider = agent?.options?.provider
+  const model = agent?.options?.model
+  if (typeof provider === 'string' && typeof model === 'string') {
+    return { provider, model, reasoningEffort: agent?.options?.reasoningEffort }
+  }
+  return undefined
+}
+
+/**
+ * Effort ids the route actually advertises. `llm.prepareCall()` throws
+ * `UNSUPPORTED_REASONING_EFFORT` for an explicit effort the model does not
+ * list, so an unknown/unsupported route is left untouched rather than broken.
+ * Returns undefined when the llm service cannot be inspected (unit tests, or a
+ * surface without it), in which case the caller applies the role effort.
+ */
+async function advertisedEfforts(ctx, selection) {
+  try {
+    const llm = typeof ctx?.get === 'function' ? ctx.get('llm') : undefined
+    if (!llm || typeof llm.resolveModelInfo !== 'function') return undefined
+    const info = await llm.resolveModelInfo(selection.provider, selection.model)
+    const efforts = info?.reasoning?.efforts
+    if (!Array.isArray(efforts)) return []
+    return efforts.map((effort) => effort?.id).filter((id) => typeof id === 'string')
+  } catch {
+    // An unregistered/unknown route must not be guessed at.
+    return []
+  }
+}
+
+/**
+ * Force the role's effort onto the Agent's recorded selection. DSH reads
+ * `agent.model.current()` once per step, and `model.select()` appends a
+ * `model/selection` event that becomes the pending choice, so applying this at
+ * `agent/created` (before the first turn) makes every request of that agent use
+ * the role level. It is idempotent: an already-correct selection is not
+ * re-appended, so the session log stays stable across reconciles.
+ *
+ * @returns the applied effort id, or undefined when nothing was changed.
+ */
+async function applyRoleEffort(ctx, agent, role) {
+  const target = roleEffort(role)
+  if (target === undefined) return undefined
+  const model = agent?.model
+  if (!model || typeof model.select !== 'function') return undefined
+  const selection = selectionOf(agent)
+  if (!selection) return undefined
+  if (selection.reasoningEffort === target) return target
+  const efforts = await advertisedEfforts(ctx, selection)
+  if (Array.isArray(efforts) && !efforts.includes(target)) return undefined
+  model.select({ provider: selection.provider, model: selection.model, reasoningEffort: target })
+  return target
+}
+
 function normalizeId(value) {
   return typeof value === 'string' ? value.replace(/^session-/, '') : value
 }
@@ -393,6 +482,7 @@ export function apply(ctx, config) {
         guard: [],
         switches: [],
         setups: [],
+        efforts: [],
         disposals: 0,
       }
     : undefined
@@ -616,12 +706,41 @@ export function apply(ctx, config) {
     }
   }
 
+  /**
+   * Derive the role from the CURRENT preset/lineage and force its reasoning
+   * effort. Awaited from `agent/created` (DSH's serial creation dispatch waits
+   * for listeners), so a worker's very first step already runs at `low`.
+   * Diagnostics record the transition, never the contracts.
+   */
+  const applyEffort = async (agent) => {
+    try {
+      const state = stateFor(agent)
+      const before = selectionOf(agent)?.reasoningEffort
+      const applied = await applyRoleEffort(ctx, agent, state.role)
+      if (diag && applied !== undefined) {
+        diag.efforts.push({
+          id: String(normalizeId(agent?.id ?? agent)),
+          role: state.role,
+          from: before ?? null,
+          to: applied,
+          at: new Date().toISOString(),
+        })
+        if (diag.efforts.length > 25) diag.efforts.shift()
+        flushDiag()
+      }
+      return applied
+    } catch (error) {
+      warn(ctx, `reasoning effort hook failed: ${errorMessage(error)}`)
+      return undefined
+    }
+  }
+
   // Root-scoped listener: the profile context can be a sibling of agent
   // scopes, but a root listener is unscoped and receives every `scopeTarget`
   // dispatch (agent/created and agent/disposed).
   const host = typeof ctx?.root?.on === 'function' ? ctx.root : ctx
   try {
-    host.on('agent/created', payload => {
+    host.on('agent/created', async payload => {
       try {
         const agent = payload?.agent
         if (diag) {
@@ -635,6 +754,9 @@ export function apply(ctx, config) {
           flushDiag()
         }
         setup(agent)
+        // Serial creation dispatch awaits this listener, so the selection is
+        // recorded before the agent's first step resolves its effort.
+        await applyEffort(agent)
       } catch (error) {
         warn(ctx, `agent/created failed: ${errorMessage(error)}`)
       }
@@ -668,6 +790,9 @@ export function apply(ctx, config) {
       states.delete(key)
       teardown(key)
       setup(agent)
+      // The switch starts the next turn after this handler returns, so the
+      // new role effort is recorded before that turn's step preparation.
+      void applyEffort(agent)
     } catch (error) {
       warn(ctx, `preset switch failed: ${errorMessage(error)}`)
     }
@@ -690,6 +815,7 @@ export function apply(ctx, config) {
       for (const agent of agents) {
         try {
           setup(agent)
+          void applyEffort(agent)
         } catch (error) {
           warn(ctx, `reconcile failed: ${errorMessage(error)}`)
         }
@@ -747,6 +873,12 @@ export const internal = {
   WORKER_DENY,
   ARCHITECT_CONTRACT,
   WORKER_CONTRACT,
+  ARCHITECT_EFFORT,
+  WORKER_EFFORT,
+  roleEffort,
+  selectionOf,
+  advertisedEfforts,
+  applyRoleEffort,
   MAX_RESULT_BYTES,
   RESULT_HEAD_BYTES,
   RESULT_TAIL_BYTES,

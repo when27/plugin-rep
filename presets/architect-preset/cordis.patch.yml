@@ -1,3 +1,8 @@
+# Reasoning effort is NOT a preset-schema field (`dsh-agent-preset` Config is
+# id/name/description/order/plugins only), so the role split lives in index.js:
+# the Architect main is forced to `high` and lineage workers to `low` through
+# `agent.model.select()` at `agent/created` (before the first step fixes the
+# request's effort). Non-architect sessions are never touched.
 - insert:
     - id: preset-architect
       name: '@deepseek-ai/dsh-agent-preset'

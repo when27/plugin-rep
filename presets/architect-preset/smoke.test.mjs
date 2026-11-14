@@ -33,6 +33,20 @@ function test(title, fn) {
   }
 }
 
+// Awaitable variant for the asynchronous creation path. Used with top-level
+// await so the summary line still runs after every async check.
+async function testAsync(title, fn) {
+  try {
+    await fn()
+    passed += 1
+    console.log(`ok ${passed} - ${title}`)
+  } catch (error) {
+    failures.push(title)
+    console.error(`not ok - ${title}`)
+    console.error(String(error?.stack ?? error).split('\n').slice(0, 4).join('\n'))
+  }
+}
+
 const KNOWN = [
   'subagent',
   'subagent_fork',
@@ -80,12 +94,23 @@ function makeTools(known = KNOWN) {
   return service
 }
 
-function makeHost({ known = KNOWN, projections = new Map(), tools = makeTools(known) } = {}) {
+const DEEPSEEK_EFFORTS = ['off', 'low', 'high', 'max']
+
+function makeHost({
+  known = KNOWN,
+  projections = new Map(),
+  tools = makeTools(known),
+  // Effort ids the fake llm reports for every route. `null` means the route
+  // advertises no reasoning capability; an array restricts it to those ids.
+  efforts = DEEPSEEK_EFFORTS,
+} = {}) {
   const listeners = new Map()
   const warns = []
   const liveAgents = new Map()
+  const resolved = []
   const host = {
     tools,
+    resolved,
     get(service) {
       if (service === 'tools') return tools
       if (service === 'agents') {
@@ -98,6 +123,22 @@ function makeHost({ known = KNOWN, projections = new Map(), tools = makeTools(kn
         return {
           presetForSession: (session) => projections.get(session?.id) ?? session?.header?.agentPreset ?? null,
           list: async () => [],
+        }
+      }
+      if (service === 'llm') {
+        return {
+          async resolveModelInfo(provider, model) {
+            resolved.push({ provider, model })
+            if (efforts === null) return { provider, id: model }
+            return {
+              provider,
+              id: model,
+              reasoning: {
+                efforts: efforts.map((id) => ({ id })),
+                defaultEffort: efforts.includes('high') ? 'high' : undefined,
+              },
+            }
+          },
         }
       }
       return undefined
@@ -117,11 +158,29 @@ function makeHost({ known = KNOWN, projections = new Map(), tools = makeTools(kn
   return host
 }
 
-function makeAgent({ id, preset, depth = 0, parent, host, restrictThrows = false, headerPreset = true }) {
+function makeAgent({
+  id,
+  preset,
+  depth = 0,
+  parent,
+  host,
+  restrictThrows = false,
+  headerPreset = true,
+  // Recorded model selection at creation. DSH's `agent/model` surface reads the
+  // projection first and falls back to the creation options, so the fake keeps
+  // one mutable recorded selection and logs every select() the plugin makes.
+  provider = 'deepseek-account',
+  model = 'deepseek-flash',
+  effort = 'max',
+}) {
   const restricted = []
   const sections = []
   const agentGuards = []
   const postHooks = []
+  const selections = []
+  let recorded = effort === undefined
+    ? { provider, model }
+    : { provider, model, reasoningEffort: effort }
   const agentTools = {
     view: host.tools.view,
     definitions: host.tools.definitions,
@@ -143,8 +202,19 @@ function makeAgent({ id, preset, depth = 0, parent, host, restrictThrows = false
     ...(depth > 0 ? { delegationDepth: depth } : {}),
     ...(parent !== undefined ? { parentSession: parent } : {}),
   }
+  const agentModel = {
+    current() {
+      return { ...recorded }
+    },
+    select(selection) {
+      recorded = { ...selection }
+      selections.push({ ...selection })
+    },
+  }
   const agent = {
     id,
+    model: agentModel,
+    options: { provider, model, reasoningEffort: effort },
     session: { id, header },
     ctx: {
       tools: agentTools,
@@ -163,12 +233,15 @@ function makeAgent({ id, preset, depth = 0, parent, host, restrictThrows = false
       },
     },
   }
-  return { agent, restricted, sections, agentGuards, postHooks }
+  return { agent, restricted, sections, agentGuards, postHooks, selections }
 }
 
-const emitCreated = (host, agent) => {
+// DSH announces an agent with `await ctx.serial(carrier, 'agent/created', ...)`:
+// serial listeners may be async and creation waits for them. Mirror that so the
+// effort tests observe exactly what runtime ordering guarantees.
+const emitCreated = async (host, agent) => {
   host.liveAgents.set(agent.id, agent)
-  for (const listener of host.listeners.get('agent/created') ?? []) listener({ agent })
+  for (const listener of host.listeners.get('agent/created') ?? []) await listener({ agent })
 }
 const emitDisposed = (host, agent) => {
   host.liveAgents.delete(agent.id)
@@ -617,6 +690,167 @@ const emitPresetSelected = (host, sessionId, preset) => {
       assert.equal(guard({ name: 'subagent', arguments: { prompt: 'untagged x' }, agent }), undefined)
     }
     assert.equal(guard({ name: 'subagent', arguments: { prompt: 'untagged y' }, agent }), internal.DELEGATION_BUSY)
+  })
+}
+
+// ---------------------------------------------------------------------------
+// role-based reasoning effort: main high, workers low, others untouched
+// ---------------------------------------------------------------------------
+{
+  let seq = 0
+  const build = async ({
+    preset = 'architect',
+    depth = 0,
+    parent,
+    effort = 'max',
+    efforts,
+    provider,
+    model,
+  } = {}) => {
+    seq += 1
+    const host = makeHost({ efforts })
+    apply(host, { dumpRoster: false, diagnostics: false })
+    const made = makeAgent({
+      id: `effort-${seq}`,
+      preset,
+      depth,
+      parent,
+      host,
+      effort,
+      provider,
+      model,
+    })
+    await emitCreated(host, made.agent)
+    return { host, ...made }
+  }
+
+  await testAsync('architect main resolves to high, downgrading max', async () => {
+    const { agent, selections, host } = await build({ effort: 'max' })
+    assert.equal(agent.model.current().reasoningEffort, 'high')
+    assert.deepEqual(selections, [
+      { provider: 'deepseek-account', model: 'deepseek-flash', reasoningEffort: 'high' },
+    ])
+    // Capability lookup uses the agent's exact current route.
+    assert.deepEqual(host.resolved, [{ provider: 'deepseek-account', model: 'deepseek-flash' }])
+  })
+
+  await testAsync('architect main is raised to high even when the profile default is low', async () => {
+    const { agent, selections } = await build({ effort: 'low' })
+    assert.equal(agent.model.current().reasoningEffort, 'high')
+    assert.equal(selections.at(-1).reasoningEffort, 'high')
+  })
+
+  await testAsync('architect main already at high records no duplicate selection', async () => {
+    const { agent, selections } = await build({ effort: 'high' })
+    assert.equal(selections.length, 0)
+    assert.equal(agent.model.current().reasoningEffort, 'high')
+    const again = await internal.applyRoleEffort(
+      { get: () => undefined },
+      agent,
+      'main',
+    )
+    assert.equal(again, 'high')
+    assert.equal(selections.length, 0)
+  })
+
+  await testAsync('depth>0 worker is forced to low (native DeepSeek level)', async () => {
+    const { agent, selections } = await build({ depth: 1, parent: 'session-effort-main', effort: 'max' })
+    assert.equal(agent.model.current().reasoningEffort, 'low')
+    assert.deepEqual(selections, [
+      { provider: 'deepseek-account', model: 'deepseek-flash', reasoningEffort: 'low' },
+    ])
+  })
+
+  await testAsync('a parentSession worker at depth 0 is also forced to low', async () => {
+    const { agent } = await build({ depth: 0, parent: 'session-effort-fork', effort: 'max' })
+    assert.equal(agent.model.current().reasoningEffort, 'low')
+  })
+
+  await testAsync('worker already at low records no duplicate selection', async () => {
+    const { agent, selections } = await build({ depth: 1, parent: 'session-x', effort: 'low' })
+    assert.equal(selections.length, 0)
+    assert.equal(agent.model.current().reasoningEffort, 'low')
+  })
+
+  await testAsync('a non-architect session is left completely untouched', async () => {
+    const { agent, selections, restricted, sections } = await build({ preset: 'standard', effort: 'max' })
+    assert.equal(selections.length, 0)
+    assert.equal(agent.model.current().reasoningEffort, 'max')
+    assert.equal(restricted.length, 0)
+    assert.equal(sections.length, 0)
+  })
+
+  await testAsync('a child of a non-architect session is left untouched', async () => {
+    const { agent, selections } = await build({
+      preset: 'standard',
+      depth: 1,
+      parent: 'session-standard-main',
+      effort: 'max',
+    })
+    assert.equal(selections.length, 0)
+    assert.equal(agent.model.current().reasoningEffort, 'max')
+  })
+
+  await testAsync('a route without the target level is not forced into UNSUPPORTED_REASONING_EFFORT', async () => {
+    const worker = await build({ depth: 1, parent: 'session-y', effort: 'max', efforts: ['off', 'high'] })
+    assert.equal(worker.agent.model.current().reasoningEffort, 'max')
+    assert.equal(worker.selections.length, 0)
+    // Sanity: the same route still supports the Architect's high.
+    const main = await build({ effort: 'max', efforts: ['off', 'high'] })
+    assert.equal(main.agent.model.current().reasoningEffort, 'high')
+  })
+
+  await testAsync('a route with no reasoning capability is left untouched', async () => {
+    const { agent, selections } = await build({ effort: 'max', efforts: null })
+    assert.equal(selections.length, 0)
+    assert.equal(agent.model.current().reasoningEffort, 'max')
+  })
+
+  await testAsync('the preset switch applies the new role effort before the next turn', async () => {
+    const projections = new Map([['session-switch-effort', 'standard']])
+    const host = makeHost({ projections })
+    apply(host, { dumpRoster: false, diagnostics: false })
+    const { agent, selections } = makeAgent({
+      id: 'session-switch-effort',
+      preset: 'standard',
+      host,
+      effort: 'max',
+    })
+    await emitCreated(host, agent)
+    assert.equal(selections.length, 0)
+    projections.set('session-switch-effort', 'architect')
+    emitPresetSelected(host, 'session-switch-effort', 'architect')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.equal(agent.model.current().reasoningEffort, 'high')
+    assert.equal(selections.at(-1).reasoningEffort, 'high')
+  })
+
+  await testAsync('role effort never changes the role prompt: prefixes stay byte-identical', async () => {
+    const first = await build({ effort: 'max' })
+    const second = await build({ effort: 'low' })
+    const workerFirst = await build({ depth: 1, parent: 'session-p1', effort: 'max' })
+    const workerSecond = await build({ depth: 1, parent: 'session-p2', effort: 'high' })
+    assert.equal(first.sections.length, 1)
+    assert.equal(second.sections.length, 1)
+    assert.equal(workerFirst.sections.length, 1)
+    assert.equal(workerSecond.sections.length, 1)
+    assert.equal(first.sections[0].text, internal.ARCHITECT_CONTRACT)
+    assert.equal(second.sections[0].text, internal.ARCHITECT_CONTRACT)
+    assert.equal(workerFirst.sections[0].text, internal.WORKER_CONTRACT)
+    assert.equal(workerSecond.sections[0].text, internal.WORKER_CONTRACT)
+    assert.equal(first.sections[0].text, second.sections[0].text)
+    assert.equal(workerFirst.sections[0].text, workerSecond.sections[0].text)
+    // The contracts remain static strings with zero interpolation, so an
+    // effort change can never rotate the DeepSeek prefix cache.
+    for (const contract of [internal.ARCHITECT_CONTRACT, internal.WORKER_CONTRACT]) {
+      assert.equal(contract.includes('${'), false)
+      assert.equal(contract.includes('reasoningEffort'), false)
+    }
+    assert.equal(internal.roleEffort('main'), 'high')
+    assert.equal(internal.roleEffort('worker'), 'low')
+    assert.equal(internal.roleEffort('other'), undefined)
+    assert.equal(internal.ARCHITECT_EFFORT, 'high')
+    assert.equal(internal.WORKER_EFFORT, 'low')
   })
 }
 

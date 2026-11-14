@@ -23,17 +23,17 @@ locally patched `dsh-tier-router` build, the patch files that produced it, and t
 | Path | What it is |
 | --- | --- |
 | `profiles/desktop/cordis.yml` | Profile root entry list. Deliberately `[]`: the plugin tree is composed from the profile bundles, then `cordis.patch.yml`, then any `--patch` overlays. Edit the patch file, not this one. |
-| `profiles/desktop/cordis.patch.yml` | The profile patch layer: UI config (account step done, chat `transcriptView: verbose`/`performanceUsage: detailed`, settings UI disabled, dark theme), `agent-default-model` (`deepseek-account` / `deepseek-flash` / `reasoningEffort: max`), `agent-preset-registry` with `default: architect` + `selectedDefault: architect`, and the inserted `architect-tool-restrict` row (`@local/dsh-architect-preset`). |
+| `profiles/desktop/cordis.patch.yml` | The profile patch layer: UI config (account step done, chat `transcriptView: verbose`/`performanceUsage: detailed`, settings UI disabled, dark theme), `agent-default-model` (`deepseek-account` / `deepseek-flash` / `reasoningEffort: low`), `agent-preset-registry` with `default: architect` + `selectedDefault: architect`, and the inserted `architect-tool-restrict` row (`@local/dsh-architect-preset`). The low default is the routine level; the Architect hook raises the main agent to `high` and forces workers to `low`. |
 | `profiles/desktop/package.json` | Profile manifest: `dsh.profile.bundles` order and dependencies. Contains **source-machine absolute paths** (`link:` / `file:`) that must be adjusted after restore. |
 | `profiles/desktop/pnpm-lock.yaml` | Lockfile for the profile dependencies (re-run `pnpm install` after changing `file:` paths). |
 | `profiles/desktop/pnpm-workspace.yaml` | pnpm settings: single package (`.`), `nodeLinker: hoisted`, `autoInstallPeers: false`. |
 | `profiles/desktop/compatibility.json` | Extra compatibility pin: `{"dsh-tier-router@0.6.0": ["0.2.2-rc.1"]}`. |
 | `profiles/desktop/settings/` | **Absent on the source machine** — there were no separate text settings files; all text config lived directly in the profile root and is captured above. |
 | `profiles/global/agent_rules.md` | Master/subagent operating rules (human-readable copy of the runtime `MEMORY.md` rules). DSH does **not** auto-load this path; it exists so the rules are reviewable/versioned. |
-| `presets/architect-preset/index.js` | The `architect-tool-restrict` Cordis plugin: deny lists, static `ARCHITECT_CONTRACT`/`WORKER_CONTRACT` injection, uncapped worker tool calls (no call-count ceiling), and agent-scoped `tools/post-execute` result truncation (64 KB threshold, 24 KB head + 24 KB tail). Tracks absolute `ROSTER_DUMP`/`DIAG_DUMP` paths used only for diagnostics — adjust or ignore them. |
+| `presets/architect-preset/index.js` | The `architect-tool-restrict` Cordis plugin: deny lists, static `ARCHITECT_CONTRACT`/`WORKER_CONTRACT` injection, role-based `reasoningEffort` (`high` for the Architect, `low` for lineage workers), uncapped worker tool calls (no call-count ceiling), and agent-scoped `tools/post-execute` result truncation (64 KB threshold, 24 KB head + 24 KB tail). Tracks absolute `ROSTER_DUMP`/`DIAG_DUMP` paths used only for diagnostics — adjust or ignore them. |
 | `presets/architect-preset/cordis.patch.yml` | Defines the preset itself: `preset-architect` row (`@deepseek-ai/dsh-agent-preset`, config `id: architect`, `order: 20`) and its plugin rows. |
 | `presets/architect-preset/package.json` | Package `@local/dsh-architect-preset` (private, ESM) with `dsh.bundle.patch: ./cordis.patch.yml`. |
-| `presets/architect-preset/smoke.test.mjs` | 40-check smoke suite for the restriction plugin; Node built-ins only, no dependencies. |
+| `presets/architect-preset/smoke.test.mjs` | 52-check smoke suite for the restriction and reasoning-effort hooks; Node built-ins only, no dependencies. |
 | `plugins/usage-popup/src/index.tsx` | Client half of the token-usage popup: composer HUD with per-session token usage, model/balance ledger, draggable HUD position. |
 | `plugins/usage-popup/scripts/build.mjs` | Tranpiles `src/index.tsx` with the TypeScript compiler API into `dist/index.js` + `dist/client.js` (`npm run build`). |
 | `plugins/usage-popup/cordis.patch.yml` | Bundle patch: inserts row `usage-popup` (name `usage-popup`). |
@@ -111,6 +111,37 @@ only if its role changes, which keeps DeepSeek prefix caching effective.
   `smoke.test.mjs`, `README.md`) passes through intact, so workers don't re-read files in
   chunks. Only the current result is changed, never prior turns, and structured non-text
   content is left intact.
+
+### Reasoning effort by role (output-token spike control)
+
+Architect output-token spikes came from `reasoning_content` at `reasoningEffort: max`,
+not from routing. The preset now pins the level per role before each agent's first request:
+
+- **Architect (`main`)** — forced to `high`; `max` is downgraded and an inherited routine
+  `low` default is raised back to `high`.
+- **Workers (`depth > 0` / `parentSession`)** — forced to `low`. Thinking stays enabled;
+  DeepSeek's wire API maps `medium` to `high`, so `low` is the only native level that
+  actually reduces worker reasoning tokens.
+- **Non-architect sessions (Standard, OPTC, ...)** — left completely untouched by the
+  preset hook; they keep whatever the profile `agent-default-model` selection says.
+
+Mechanism: DSH fixes a step's selection in `AgentLoop.preStep()` from
+`agent.model.current()` and then rejects any `agent/request` waterfall that changes
+`reasoningEffort` (it throws instead of ignoring the change). The plugin therefore calls
+`agent.model.select({ provider, model, reasoningEffort })` from the awaited
+`agent/created` serial listener (and again on a preset switch), which appends a
+`model/selection` event before the first step. The route's advertised efforts are read
+first (`llm.resolveModelInfo`), so a model that does not list the level is left alone
+instead of failing with `UNSUPPORTED_REASONING_EFFORT`. The role contracts are untouched,
+so the cached prefix stays byte-identical.
+
+`agent-default-model` in the profile is lowered to `reasoningEffort: low` as the routine
+default for new sessions; the Architect hook raises the main agent to `high` and forces
+workers to `low`. `dsh-tier-router` was inspected and is adapter-level only: it routes a
+request that selects `tier-router/smart` and applies its per-tier effort there, with no
+per-agent/role hook — so wiring the split directly into the preset is cleaner and
+deterministic. Do not also install a plugin that force-overrides the model on
+`agent/request`.
 
 ### How it is mounted and configured
 
@@ -282,7 +313,7 @@ only if its role changes, which keeps DeepSeek prefix caching effective.
 9. **Optionally verify the preset plugin:**
 
    ```bash
-   node presets/architect-preset/smoke.test.mjs   # exit 0, 40 pass, 0 fail
+   node presets/architect-preset/smoke.test.mjs   # exit 0, 52 pass, 0 fail
    ```
 
 ## Required caveats
@@ -326,7 +357,7 @@ only if its role changes, which keeps DeepSeek prefix caching effective.
 
 ## Verification performed for this export
 
-- `node presets/architect-preset/smoke.test.mjs` → **exit 0, 40 pass, 0 fail**
+- `node presets/architect-preset/smoke.test.mjs` → **exit 0, 52 pass, 0 fail**
   (same result in the original workspace at `architect-preset/smoke.test.mjs`).
 - Staged working tree: **244 files, 2,711,164 bytes**; `skills/modern-web-guidance/SKILL.md`
   and this `README.md` present; no `node_modules`, `.git`, logs, crash dumps, `*.diag.json`,
