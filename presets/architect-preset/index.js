@@ -64,15 +64,16 @@ const WORKER_DENY = [
 const DELEGATION_TOOLS = new Set(['subagent', 'subagent_fork', 'delegate'])
 const PENDING_TTL_MS = 5 * 60 * 1000
 const MAX_PENDING = 16
-// One flat runaway-loop ceiling for every worker-role agent. The count is
-// enforced from this module's memory and is never interpolated into prompt
-// text or tool schemas.
-const WORKER_CALL_CEILING = 120
+// Tool calls are never counted or capped: workers make as many sequential
+// cached calls as the task needs, and the static contract keeps the session
+// prefix cache warm across all of them. Only the delegation queue is bounded.
 // Oversized tool results are head+tail truncated in the `tools/post-execute`
 // waterfall, i.e. after execution but before they are committed to history.
-const MAX_RESULT_BYTES = 10240
-const RESULT_HEAD_BYTES = 4096
-const RESULT_TAIL_BYTES = 4096
+// 64 KB lets a normal source file through intact; above that, 24 KB of each end
+// is kept so a worker does not have to re-read the file in chunks.
+const MAX_RESULT_BYTES = 65536
+const RESULT_HEAD_BYTES = 24576
+const RESULT_TAIL_BYTES = 24576
 
 const ROSTER_DUMP =
   'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/architect-preset/.roster.json'
@@ -103,6 +104,8 @@ const ARCHITECT_CONTRACT = [
   '  no unrelated tests."',
   '- Prefer subagent over subagent_fork unless the full conversation history is strictly',
   '  needed: subagent gives each worker a clean, cache-friendly prefix.',
+  '- For routine tasks use a single worker plus your own verification; do not spawn redundant',
+  '  multi-worker review chains.',
   '- Emit zero narration before tool calls: call the tool directly.',
   '- Keep the final response concise: result, files changed, verification, remaining risks.',
 ].join('\n')
@@ -115,17 +118,13 @@ const WORKER_CONTRACT = [
   '- Emit zero prose between tool calls: call the next tool directly.',
   '- Read only the files named in the task or unambiguously required; at most one discovery',
   '  call. No code_map, no code_index, no repo-wide grep/glob, no unrelated tests.',
-  '- No plans, todos, documents, or subagents.',
+  '- Prefer targeted edit over full-file write rewrites: every written byte costs output',
+  '  tokens. No plans, todos, documents, or subagents.',
+  '- No tool-call cap applies; keep each call small, sequential, and cache-friendly.',
   '- Return only a compact completion receipt: files changed, commands with exit codes, and',
   '  the verification outcome. Never paste full file contents.',
   '- If blocked or ambiguous, stop and report immediately; do not guess or explore.',
-  '- A per-worker runaway-loop safety call ceiling applies and is enforced in code.',
 ].join('\n')
-
-const WORKER_CEILING_REASON =
-  'TOOL CALL CEILING REACHED: the 120-call runaway-loop safety ceiling is exhausted and all ' +
-  'tools are now blocked. Stop immediately and return your compact completion receipt: work ' +
-  'completed, exact files changed, commands with exit codes, verification, and blockers.'
 
 const DELEGATION_BUSY =
   'DELEGATION REJECTED: too many queued workers. Wait for the current workers to finish, or ' +
@@ -383,7 +382,6 @@ export function apply(ctx, config) {
 
   const pending = []
   const states = new Map()
-  const workerCalls = new Map()
   const parentOf = new Map()
   const architectIds = new Set()
   const disposers = new Map()
@@ -508,8 +506,7 @@ export function apply(ctx, config) {
 
   // Guard registration is idempotent per execution object: the same guard can
   // live in the root layer AND in the agent's own scope (defense in depth), and
-  // checkGuards() must not queue one delegation twice or double-charge a
-  // worker's call count.
+  // checkGuards() must not queue one delegation twice.
   const seen = new WeakSet()
 
   // Global enforcement: identical decisions to the per-agent setup below,
@@ -542,12 +539,7 @@ export function apply(ctx, config) {
       }
 
       if (WORKER_DENY.includes(toolName)) return WORKER_DENY_REASON(toolName)
-      // The main role is never capped; one flat 120-call runaway-loop ceiling
-      // applies to every worker-role agent, keyed by its session id in memory.
-      const agentKey = normalizeId(agent?.id ?? agent)
-      const calls = workerCalls.get(agentKey) ?? 0
-      if (calls >= WORKER_CALL_CEILING) return WORKER_CEILING_REASON
-      workerCalls.set(agentKey, calls + 1)
+      // No call-count cap: workers may keep making sequential cached calls.
       return undefined
     } catch (error) {
       warn(ctx, `delegation guard failed: ${errorMessage(error)}`)
@@ -737,7 +729,6 @@ export function apply(ctx, config) {
           flushDiag()
         }
         states.delete(key)
-        workerCalls.delete(key)
         teardown(key)
       } catch {
         // disposal must never break agent teardown
@@ -756,9 +747,9 @@ export const internal = {
   WORKER_DENY,
   ARCHITECT_CONTRACT,
   WORKER_CONTRACT,
-  WORKER_CALL_CEILING,
-  WORKER_CEILING_REASON,
   MAX_RESULT_BYTES,
+  RESULT_HEAD_BYTES,
+  RESULT_TAIL_BYTES,
   isSubagent,
   normalizeId,
   presetOf,

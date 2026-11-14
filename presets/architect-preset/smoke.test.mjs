@@ -10,7 +10,8 @@
 //   * preset identity from the `agentPreset` session projection, not the header;
 //   * an agent-scoped `tools/post-execute` waterfall listener that bounds the
 //     current result's content before the batch settlement appends it to the
-//     `tool/result` history event (prior turns are never mutated).
+//     `tool/result` history event (prior turns are never mutated);
+//   * no tool-call count cap: workers may keep making sequential cached calls.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { apply, internal, name as pluginName, inject } from './index.js'
@@ -269,7 +270,7 @@ const emitPresetSelected = (host, sessionId, preset) => {
 }
 
 // ---------------------------------------------------------------------------
-// lineage workers: keep file/shell tools, lose delegation, one 120 ceiling
+// lineage workers: keep file/shell tools, lose delegation, no call-count cap
 // ---------------------------------------------------------------------------
 {
   const host = makeHost()
@@ -304,20 +305,18 @@ const emitPresetSelected = (host, sessionId, preset) => {
     assert.match(guard({ name: 'send_message', arguments: {}, agent: worker }), /NOT PERMITTED FOR WORKERS/)
   })
 
-  test('worker enforces exactly one flat 120-call ceiling and no 30/60 cap', () => {
-    assert.equal(internal.WORKER_CALL_CEILING, 120)
+  test('worker has no tool-call count cap (150+ sequential calls all succeed)', () => {
+    assert.equal('WORKER_CALL_CEILING' in internal, false)
+    assert.equal('WORKER_CEILING_REASON' in internal, false)
+    assert.doesNotMatch(SOURCE, /WORKER_CALL_CEILING|WORKER_CEILING_REASON|workerCalls/)
     assert.doesNotMatch(SOURCE, /BUDGETS|cheapBudget|heavyBudget|30\/30|60\/60/)
     let calls = 3 // the allowed read, edit, pwsh above
-    while (calls < 120) {
+    for (let index = 0; index < 240; index += 1) {
       assert.equal(guard({ name: 'read', arguments: { path: `f${calls}` }, agent: worker }), undefined)
       calls += 1
     }
-    const first = guard({ name: 'read', arguments: { path: 'over' }, agent: worker })
-    const second = guard({ name: 'grep', arguments: { pattern: 'x' }, agent: worker })
-    assert.equal(first, internal.WORKER_CEILING_REASON)
-    assert.equal(second, first)
-    assert.match(first, /TOOL CALL CEILING REACHED/)
-    assert.match(first, /120-call/)
+    assert.equal(guard({ name: 'grep', arguments: { pattern: 'x' }, agent: worker }), undefined)
+    assert.equal(guard({ name: 'pwsh', arguments: { command: 'node -v' }, agent: worker }), undefined)
   })
 
   test('worker gets only the static WORKER_CONTRACT section, at a stable position', () => {
@@ -328,6 +327,8 @@ const emitPresetSelected = (host, sessionId, preset) => {
     assert.equal(sections[0].text, internal.WORKER_CONTRACT)
     assert.match(sections[0].text, /frequent, small, targeted tool calls/)
     assert.match(sections[0].text, /zero prose between tool calls/)
+    assert.match(sections[0].text, /prefer targeted edit over full-file write/i)
+    assert.match(sections[0].text, /No tool-call cap applies/)
     assert.equal(sections[0].text.includes('ARCHITECT ROLE CONTRACT'), false)
     assert.equal(postHooks.length, 1)
   })
@@ -363,7 +364,7 @@ const emitPresetSelected = (host, sessionId, preset) => {
 
   test('the same role prompt is byte-identical under differing session/call state', () => {
     const cold = build({ run: 'cold', calls: 0 })
-    const hot = build({ run: 'hot', calls: 100 })
+    const hot = build({ run: 'hot', calls: 240 })
     assert.equal(cold.main.sections.length, 1)
     assert.equal(hot.main.sections.length, 1)
     assert.equal(cold.worker.sections.length, 1)
@@ -477,6 +478,22 @@ const emitPresetSelected = (host, sessionId, preset) => {
   test('the other cache is gone: the projection now reads architect', () => {
     assert.equal(internal.presetOf(host, agent), 'architect')
   })
+
+  test('after the switch a lineage worker gets WORKER_CONTRACT, never ARCHITECT_CONTRACT', () => {
+    const { agent: worker, sections: workerSections } = makeAgent({
+      id: 'session-optc-1-worker',
+      preset: 'architect',
+      depth: 1,
+      parent: 'session-optc-1',
+      host,
+    })
+    emitCreated(host, worker)
+    assert.equal(workerSections.length, 1)
+    assert.equal(workerSections[0].name, 'architect:role-contract')
+    assert.equal(workerSections[0].order, 2690)
+    assert.equal(workerSections[0].text, internal.WORKER_CONTRACT)
+    assert.equal(workerSections[0].text.includes('ARCHITECT ROLE CONTRACT'), false)
+  })
 }
 
 // A switch whose event never reaches the plugin must still be re-derived from
@@ -527,7 +544,7 @@ const emitPresetSelected = (host, sessionId, preset) => {
   emitCreated(host, agent)
   const listener = postHooks[0]
   const exec = { name: 'read', callId: 'call-1' }
-  const largeText = `HEAD${'x'.repeat(20000)}TAIL`
+  const largeText = `HEAD${'x'.repeat(70000)}TAIL`
 
   test('an oversized text result is head+tail truncated by the post-execute hook', () => {
     const decision = listener(exec, { content: [{ type: 'text', text: largeText }] }, () => ({ kind: 'accept' }))
@@ -535,20 +552,31 @@ const emitPresetSelected = (host, sessionId, preset) => {
     assert.equal(decision.content.length, 1)
     const text = decision.content[0].text
     assert.ok(Buffer.byteLength(text) < internal.MAX_RESULT_BYTES)
-    assert.match(text, /\[\.\.\. TRUNCATED \d+ of 20008 bytes of this tool result; head and tail preserved \.\.\.\]/)
+    assert.match(text, /\[\.\.\. TRUNCATED \d+ of 70008 bytes of this tool result; head and tail preserved \.\.\.\]/)
     assert.ok(text.startsWith(largeText.slice(0, 100)))
     assert.ok(text.endsWith(largeText.slice(-100)))
   })
 
-  test('a result under 10 KB and a block decision pass through untouched', () => {
+  test('a result under 64 KB and a block decision pass through untouched', () => {
     const small = { content: [{ type: 'text', text: 'small output' }] }
     assert.deepEqual(listener(exec, small, () => ({ kind: 'accept' })), { kind: 'accept' })
     const blocked = { kind: 'block', feedback: [{ type: 'text', text: 'no' }] }
     assert.equal(listener(exec, small, () => blocked), blocked)
   })
 
+  test('64 KB passes intact; one byte over is truncated to 24 KB head + 24 KB tail', () => {
+    const atLimit = { content: [{ type: 'text', text: 'a'.repeat(internal.MAX_RESULT_BYTES) }] }
+    assert.deepEqual(listener(exec, atLimit, () => ({ kind: 'accept' })), { kind: 'accept' })
+    const over = 'L'.repeat(internal.MAX_RESULT_BYTES) + 'R'.repeat(internal.MAX_RESULT_BYTES)
+    const decision = listener(exec, { content: [{ type: 'text', text: over }] }, () => ({ kind: 'accept' }))
+    const text = decision.content[0].text
+    assert.ok(text.startsWith('L'.repeat(internal.RESULT_HEAD_BYTES)))
+    assert.ok(text.endsWith('R'.repeat(internal.RESULT_TAIL_BYTES)))
+    assert.match(text, /TRUNCATED 81920 of 131072 bytes/)
+  })
+
   test('non-text content is left intact rather than corrupted', () => {
-    const image = { content: [{ type: 'image', data: 'a'.repeat(20000) }] }
+    const image = { content: [{ type: 'image', data: 'a'.repeat(70000) }] }
     assert.deepEqual(listener(exec, image, () => ({ kind: 'accept' })), { kind: 'accept' })
   })
 }
@@ -595,16 +623,18 @@ const emitPresetSelected = (host, sessionId, preset) => {
 // ---------------------------------------------------------------------------
 // pure helpers
 // ---------------------------------------------------------------------------
-test('the 120-call ceiling reason is one static string', () => {
-  assert.equal(internal.WORKER_CALL_CEILING, 120)
-  assert.equal(typeof internal.WORKER_CEILING_REASON, 'string')
-  assert.equal(internal.WORKER_CEILING_REASON.includes('${'), false)
-  assert.match(internal.WORKER_CEILING_REASON, /120-call/)
+test('no tool-call ceiling machinery remains in the plugin surface', () => {
+  assert.equal('WORKER_CALL_CEILING' in internal, false)
+  assert.equal('WORKER_CEILING_REASON' in internal, false)
+  assert.equal(internal.MAX_RESULT_BYTES, 65536)
+  assert.equal(internal.RESULT_HEAD_BYTES, 24576)
+  assert.equal(internal.RESULT_TAIL_BYTES, 24576)
+  assert.doesNotMatch(SOURCE, /TOOL CALL CEILING REACHED|ceiling is exhausted|WORKER_CALL_CEILING/)
 })
 
 test('head+tail truncation keeps the marker and both ends', () => {
   assert.equal(internal.truncatedToolResultContent([{ type: 'text', text: 'tiny' }]), undefined)
-  const text = `${'h'.repeat(9000)}BODY${'t'.repeat(9000)}`
+  const text = `${'h'.repeat(40000)}BODY${'t'.repeat(40000)}`
   const truncated = internal.truncatedToolResultContent([{ type: 'text', text }])
   assert.equal(truncated.length, 1)
   assert.equal(truncated[0].type, 'text')
