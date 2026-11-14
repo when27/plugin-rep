@@ -134,3 +134,29 @@ transpile `node_modules` TSX.
 - [ ] Four-field breakdown + cache-hit ratio render correctly.
 - [ ] No-session state renders without crashing.
 - [ ] Plugin loads and unloads cleanly (no leaked DOM, no body-level junk).
+
+## Host collector (0.2.0)
+
+The host half collects token usage from the global `llm/stream` waterfall,
+server-tool fees from `session/event` + a transparent `fetch` observer, and
+serves it to the client:
+
+- `GET /usage-popup/api/usage?since=<seq>` -> `{format:"usage-popup.host-usage", version:1, cursor, records}` (ascending seq, max 500). If `since > cursor` (a store restart/rotation reset seq to 1 while the browser cursor persisted) the route replays from 0 and adds the optional `reset: true` boolean.
+- `GET /usage-popup/api/health` -> collector + transport counters.
+
+Subagent tagging reads the live Session's `header` (`origin`, `parentSession`,
+`delegationDepth`, `agentPreset`); the flat session shape is still accepted for
+compatibility. Token records are emitted once per stream from the latest `usage`
+chunk (DSH last-chunk-wins). Server-tool fees are deduped process-wide with a
+5-second claim window keyed `sessionId::name`, because the wire parser and the
+`session/event` path can both observe the same request. Some provider SDKs
+(e.g. pi-ai) capture the global `fetch` before this plugin installs its wrapper,
+so the wire observer can miss their requests; the `llm/stream` and
+`session/event` feeds remain authoritative.
+
+Records persist to `$DSH_HOME/usage-popup/usage-records.jsonl` (`~/.dsh` when
+`DSH_HOME` is unset), rotating to `.1` at 32 MB. Rebuild with
+`node scripts/build.mjs` from this directory (writes `dist/index.js`,
+`dist/client.js`, `dist/host/*.js`); install the profile bundle the same way as
+before.
+

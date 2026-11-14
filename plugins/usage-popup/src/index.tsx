@@ -57,9 +57,66 @@ interface TokenUsage {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  reasoningTokens?: number
 }
 
+/**
+ * DeepSeek's `outputTokens` normally already includes reasoning tokens. If a
+ * source reports only reasoning, bill that; if it reports both, never add them
+ * together (the larger number is the one already counted).
+ */
+export function billedOutputTokens(usage: {
+  outputTokens?: number
+  reasoningTokens?: number
+}): number {
+  const output = typeof usage.outputTokens === 'number' ? usage.outputTokens : 0
+  const reasoning = typeof usage.reasoningTokens === 'number' ? usage.reasoningTokens : 0
+  return Math.max(output, reasoning)
+}
+
+/** The host collector lives in the same plugin package and owns this route. */
+const HOST_USAGE_ENDPOINT = '/usage-popup/api/usage'
+const HOST_CURSOR_KEY = 'usage-popup.host-cursor.v1'
+const HOST_REFRESH_MS = 10_000
+const HOST_FETCH_TIMEOUT_MS = 8_000
+const USD_CNY = 7.2
+
+/**
+ * Host-collector probe state. `pending` (mount, before the first poll settles)
+ * and `active` both suppress the local projection so the same tokens are never
+ * counted twice; only a confirmed-absent host half (`inactive`, HTTP 404 or a
+ * format mismatch) re-enables projection attribution. Network errors/timeouts
+ * deliberately keep the previous state, and an active host stays active forever
+ * (no TTL): its 10s poll can be throttled by background tabs without ever
+ * re-enabling projection.
+ */
+export type HostProbeState = 'pending' | 'active' | 'inactive'
+
+/** Pure projection gate: `skip` suppresses local attribution, `project` runs it. */
+export function resolveProjectionMode(hostProbe: HostProbeState): 'skip' | 'project' {
+  return hostProbe === 'inactive' ? 'project' : 'skip'
+}
+
+/**
+ * Whether a host payload means the persisted cursor must be reset. A store
+ * restart/rotation restarts seq at 1, so a stored cursor can exceed the
+ * payload's (optional `reset` flag, or a cursor below the stored one).
+ */
+export function hostCursorWasReset(
+  payloadCursor: number,
+  storedCursor: number,
+  resetFlag: unknown,
+): boolean {
+  return resetFlag === true || payloadCursor < storedCursor
+}
+
+// The host context is needed by the client to resolve session origins (subagent
+// vs main) for host-collected records. Never assume the optional `sessions`
+// service exists; all reads are guarded.
+let pluginContext: Context | null = null
+
 export function apply(ctx: Context) {
+  pluginContext = ctx
   // Register our control into the composer statistics dock. `order: 2` puts it
   // after the built-in `usage` (order 1) control.
   ctx.slots.inject('conversation.composer.dock', () =>
@@ -152,8 +209,12 @@ const LEDGER_EVENT = 'usage-popup:ledger-changed'
 const LEDGER_CHANNEL = 'usage-popup.ledger.v1'
 
 type ModelId = 'flash' | 'pro'
-/** `search` is reserved for server-tool-search charges recorded by the host. */
-type ModelClass = ModelId | 'search'
+/**
+ * `search` is reserved for server-tool-search charges recorded by the host.
+ * `unattributed` carries costs that cannot be priced from tokens (reconciliation
+ * rows, dashboard imports and provider routes with no local price card).
+ */
+type ModelClass = ModelId | 'search' | 'unattributed'
 type Tier = 'off-peak' | 'peak'
 type Timeframe = 'session' | 'day' | 'week' | 'month' | 'custom'
 
@@ -188,6 +249,26 @@ interface LedgerEntry {
   usage: TokenUsage
   costRmb: number
   at: number
+  reasoningTokens?: number
+  sessionType?:
+    | 'main'
+    | 'subagent'
+    | 'background'
+    | 'compaction'
+    | 'reconcile'
+    | 'import'
+    | 'unknown'
+  source?: 'projection' | 'host' | 'host-tool' | 'reconcile' | 'import'
+  hostId?: string
+  calls?: number
+  costUsd?: number
+  importKey?: string
+  /**
+   * `false` means the row's `costRmb` is the authoritative recorded cost (for
+   * example a non-DeepSeek provider route with no local price card). Pricing it
+   * from tokens would invent money we never measured.
+   */
+  costKnown?: boolean
 }
 
 interface SessionAnchor {
@@ -332,22 +413,28 @@ const RATE_CARDS: Record<ModelClass, { peak: RateCard; offPeak: RateCard }> = {
     offPeak: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
     peak: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
   },
+  // Costs that cannot be token-priced (reconciliation, imports, non-DeepSeek
+  // routes). The recorded costRmb is the only source of truth for these rows.
+  unattributed: {
+    offPeak: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+    peak: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+  },
 }
 
 const CONTEXT_BLOAT_TOKENS = 1_500_000
-/** Rough assistant-response size used to estimate the session's turn count. */
-const TURN_OUTPUT_TOKENS = 600
 
 const MODEL_LABELS: Record<ModelClass, string> = {
   flash: 'deepseek-flash',
   pro: 'deepseek-v4-pro',
   search: 'server-tool-search',
+  unattributed: 'Unattributed',
 }
 
 const MODEL_COLORS: Record<ModelClass, string> = {
   flash: '#3fb950',
   pro: '#58a6ff',
   search: '#d29922',
+  unattributed: '#8b949e',
 }
 
 // ---------------------------------------------------------------------------
@@ -474,7 +561,6 @@ function routedUsageAsTokenUsage(buckets: RoutedUsageBuckets): TokenUsage {
     cacheWriteTokens: buckets.cacheWriteTokens,
   }
 }
-
 function routedRowsOf(
   map: Record<string, RoutedUsageBuckets>,
   tier: Tier,
@@ -627,19 +713,35 @@ function peakTier(peak: boolean): Tier {
   return peak ? 'peak' : 'off-peak'
 }
 
-function usageCostRmb(usage: TokenUsage, model: ModelClass, peak: boolean): number {
+function round4(value: number): number {
+  return Math.round(value * 10_000) / 10_000
+}
+
+export function usageCostRmb(usage: TokenUsage, model: ModelClass, peak: boolean): number {
   const card = rateCard(model, peak)
   const weighted =
     usage.uncachedInputTokens * card.uncachedInput +
     usage.cacheReadTokens * card.cacheRead +
     usage.cacheWriteTokens * card.cacheWrite +
-    usage.outputTokens * card.output
+    billedOutputTokens(usage) * card.output
   return weighted / 1_000_000
 }
 
-/** The one true price of a ledger row, used by every total and by-model split. */
-function entryCostRmb(entry: LedgerEntry): number {
+/**
+ * The one true price of a ledger row, used by every total and by-model split.
+ * Rows that carry an authoritative recorded cost (reconciliation, imports,
+ * server tools, provider routes without a price card) must never be re-priced
+ * from tokens; only genuinely token-priced rows use the rate card.
+ */
+export function entryCostRmb(entry: LedgerEntry): number {
+  if (entry.model === 'unattributed') return Math.max(0, entry.costRmb)
   if (entry.model === 'search') return Math.max(0, entry.costRmb)
+  if (entry.costKnown === false) return Math.max(0, entry.costRmb)
+  if (entry.source === 'reconcile' || entry.source === 'host-tool') {
+    return Math.max(0, entry.costRmb)
+  }
+  if (entry.source === 'import' && entry.costRmb > 0) return Math.max(0, entry.costRmb)
+  if (isZeroUsage(entry.usage) && entry.costRmb > 0) return Math.max(0, entry.costRmb)
   return usageCostRmb(entry.usage, entry.model, entry.tier === 'peak')
 }
 
@@ -745,7 +847,13 @@ function nextRateSwitch(fromMs: number): { at: number; tier: Tier } {
 // ---------------------------------------------------------------------------
 
 function zeroUsage(): TokenUsage {
-  return { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
+  return {
+    uncachedInputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    reasoningTokens: 0,
+  }
 }
 
 function addUsage(left: TokenUsage, right: TokenUsage): TokenUsage {
@@ -754,6 +862,7 @@ function addUsage(left: TokenUsage, right: TokenUsage): TokenUsage {
     outputTokens: left.outputTokens + right.outputTokens,
     cacheReadTokens: left.cacheReadTokens + right.cacheReadTokens,
     cacheWriteTokens: left.cacheWriteTokens + right.cacheWriteTokens,
+    reasoningTokens: (left.reasoningTokens ?? 0) + (right.reasoningTokens ?? 0),
   }
 }
 
@@ -763,6 +872,10 @@ function usageDelta(next: TokenUsage, previous: TokenUsage): TokenUsage {
     outputTokens: Math.max(0, next.outputTokens - previous.outputTokens),
     cacheReadTokens: Math.max(0, next.cacheReadTokens - previous.cacheReadTokens),
     cacheWriteTokens: Math.max(0, next.cacheWriteTokens - previous.cacheWriteTokens),
+    reasoningTokens: Math.max(
+      0,
+      (next.reasoningTokens ?? 0) - (previous.reasoningTokens ?? 0),
+    ),
   }
 }
 
@@ -780,7 +893,8 @@ function sameUsage(left: TokenUsage, right: TokenUsage): boolean {
     left.uncachedInputTokens === right.uncachedInputTokens &&
     left.outputTokens === right.outputTokens &&
     left.cacheReadTokens === right.cacheReadTokens &&
-    left.cacheWriteTokens === right.cacheWriteTokens
+    left.cacheWriteTokens === right.cacheWriteTokens &&
+    (left.reasoningTokens ?? 0) === (right.reasoningTokens ?? 0)
   )
 }
 
@@ -798,8 +912,10 @@ function makeEntryId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function entryDedupKey(entry: LedgerEntry): string {
+export function entryDedupKey(entry: LedgerEntry): string {
   return [
+    entry.hostId ?? '',
+    entry.importKey ?? '',
     entry.sessionId,
     entry.at,
     entry.model,
@@ -862,11 +978,13 @@ function normalizeUsage(value: unknown): TokenUsage | null {
     'cacheCreationTokens',
     'cache_write_tokens',
   )
+  const reasoningTokens = pick('reasoningTokens', 'reasoning_tokens', 'reasoning')
   if (
     uncachedInputTokens === null &&
     outputTokens === null &&
     cacheReadTokens === null &&
-    cacheWriteTokens === null
+    cacheWriteTokens === null &&
+    reasoningTokens === null
   ) {
     return null
   }
@@ -875,6 +993,7 @@ function normalizeUsage(value: unknown): TokenUsage | null {
     outputTokens: outputTokens ?? 0,
     cacheReadTokens: cacheReadTokens ?? 0,
     cacheWriteTokens: cacheWriteTokens ?? 0,
+    reasoningTokens: reasoningTokens ?? undefined,
   }
 }
 
@@ -894,11 +1013,38 @@ function cleanTitle(value: unknown): string | null {
 function normalizeModelClass(value: unknown): ModelClass {
   if (typeof value !== 'string') return 'flash'
   const text = value.toLowerCase()
+  if (/unattributed|reconcile|unknown/.test(text)) return 'unattributed'
   if (/search|tool/.test(text)) return 'search'
   return classifyModelText(text) ?? (text === 'pro' ? 'pro' : 'flash')
 }
 
-function normalizeEntry(value: unknown, fallbackSessionId?: string | null): LedgerEntry | null {
+const LEDGER_SOURCES = ['projection', 'host', 'host-tool', 'reconcile', 'import'] as const
+const LEDGER_SESSION_TYPES = [
+  'main',
+  'subagent',
+  'background',
+  'compaction',
+  'reconcile',
+  'import',
+  'unknown',
+] as const
+
+function normalizeSource(value: unknown): LedgerEntry['source'] | undefined {
+  return typeof value === 'string' && (LEDGER_SOURCES as readonly string[]).includes(value)
+    ? (value as LedgerEntry['source'])
+    : undefined
+}
+
+function normalizeSessionType(value: unknown): LedgerEntry['sessionType'] | undefined {
+  return typeof value === 'string' && (LEDGER_SESSION_TYPES as readonly string[]).includes(value)
+    ? (value as LedgerEntry['sessionType'])
+    : undefined
+}
+
+export function normalizeEntry(
+  value: unknown,
+  fallbackSessionId?: string | null,
+): LedgerEntry | null {
   if (!isRecord(value)) return null
   const record = value
 
@@ -909,9 +1055,6 @@ function normalizeEntry(value: unknown, fallbackSessionId?: string | null): Ledg
         ? fallbackSessionId
         : null
   if (rawSessionId === null) return null
-
-  const usage = normalizeUsage(record)
-  if (usage === null || isZeroUsage(usage)) return null
 
   const atCandidate = record.at ?? record.timestamp ?? record.time
   const at =
@@ -932,6 +1075,10 @@ function normalizeEntry(value: unknown, fallbackSessionId?: string | null): Ledg
       ? record.date
       : localDateKey(at)
 
+  const usage = normalizeUsage(record) ?? zeroUsage()
+  const source = normalizeSource(record.source)
+  const sessionType = normalizeSessionType(record.sessionType)
+
   const costCandidate = record.costRmb ?? record.cost
   const parsedCost =
     typeof costCandidate === 'number'
@@ -939,13 +1086,40 @@ function normalizeEntry(value: unknown, fallbackSessionId?: string | null): Ledg
       : typeof costCandidate === 'string'
         ? Number(costCandidate)
         : Number.NaN
-  const costRmb =
-    Number.isFinite(parsedCost) && parsedCost >= 0
-      ? parsedCost
-      : usageCostRmb(usage, model, tier === 'peak')
+  const hasRecordedCost = Number.isFinite(parsedCost) && parsedCost >= 0
+  const costRmb = hasRecordedCost
+    ? parsedCost
+    : usageCostRmb(usage, model, tier === 'peak')
+
+  // Zero-usage rows are real spend only when they carry a recorded cost and a
+  // source that says so (reconciliation, imports, server tools). Everything
+  // else with no tokens is an accidental empty row and must be dropped.
+  if (isZeroUsage(usage)) {
+    const costBearingSource =
+      source === 'reconcile' || source === 'import' || source === 'host-tool'
+    const serverToolRow = isRecord(record.serverTool)
+    if (!(costBearingSource || serverToolRow) || !(costRmb > 0)) return null
+  }
+
+  const reasoningTokensRaw = record.reasoningTokens
+  const reasoningTokens =
+    typeof reasoningTokensRaw === 'number' && Number.isFinite(reasoningTokensRaw)
+      ? Math.max(0, reasoningTokensRaw)
+      : usage.reasoningTokens
 
   const rawTitle = record.sessionTitle ?? record.title ?? record.session_title
   const sessionTitle = cleanTitle(rawTitle) ?? 'Untitled chat'
+
+  const callsRaw = record.calls
+  const calls =
+    typeof callsRaw === 'number' && Number.isFinite(callsRaw) && callsRaw >= 0
+      ? Math.round(callsRaw)
+      : undefined
+  const costUsdRaw = record.costUsd
+  const costUsd =
+    typeof costUsdRaw === 'number' && Number.isFinite(costUsdRaw)
+      ? Math.max(0, costUsdRaw)
+      : undefined
 
   return {
     id:
@@ -960,6 +1134,17 @@ function normalizeEntry(value: unknown, fallbackSessionId?: string | null): Ledg
     usage,
     costRmb,
     at,
+    reasoningTokens,
+    sessionType,
+    source,
+    hostId: typeof record.hostId === 'string' && record.hostId.length > 0 ? record.hostId : undefined,
+    calls,
+    costUsd,
+    importKey:
+      typeof record.importKey === 'string' && record.importKey.length > 0
+        ? record.importKey
+        : undefined,
+    costKnown: record.costKnown === false ? false : undefined,
   }
 }
 
@@ -1002,6 +1187,28 @@ function mergeLedger(
   }
   merged.sort((a, b) => a.at - b.at)
   return merged
+}
+
+/**
+ * Merge freshly imported rows: any existing `source:'import'` row whose stable
+ * `importKey` is re-imported is dropped first (latest wins), so a grown
+ * dashboard row replaces instead of double counting.
+ */
+export function replaceImportedEntries(
+  existing: readonly LedgerEntry[],
+  incoming: readonly LedgerEntry[],
+): LedgerEntry[] {
+  const freshKeys = new Set<string>()
+  for (const entry of incoming) {
+    if (entry.source === 'import' && typeof entry.importKey === 'string') {
+      freshKeys.add(entry.importKey)
+    }
+  }
+  const kept = existing.filter(
+    (entry) =>
+      !(entry.source === 'import' && entry.importKey !== undefined && freshKeys.has(entry.importKey)),
+  )
+  return mergeLedger(kept, incoming)
 }
 
 /** Every storage key that could hold ledger rows (legacy per-session included). */
@@ -1074,6 +1281,211 @@ function writeUniversalLedger(entries: readonly LedgerEntry[]): void {
     // Storage pressure must never take down the HUD. The in-memory ledger keeps
     // working for the rest of the session.
   }
+}
+
+// ---------------------------------------------------------------------------
+// Host-record ingestion. The host collector inside this same package exposes
+// `/usage-popup/api/usage`; it is the authoritative source for every LLM call
+// and server-tool charge (including subagents and background turns). The
+// projection path stays as the fallback when that route is absent.
+// ---------------------------------------------------------------------------
+
+interface HostSessionMeta {
+  parentId?: string | null
+  origin?: string | null
+}
+
+function readSessionIndex(): Record<string, HostSessionMeta> {
+  const ctx = pluginContext as unknown as { sessions?: { list?: unknown } } | null
+  try {
+    const list = ctx?.sessions?.list
+    if (list === undefined || list === null) return {}
+    // The real SDK exposes `ctx.sessions.list` as an ObservableSnapshot
+    // (`get()`); a plain service may expose `list()`; tolerate `.value`.
+    const state: unknown =
+      typeof list === 'function'
+        ? (list as () => unknown)()
+        : ((list as { get?: () => unknown }).get?.() ?? (list as { value?: unknown }).value)
+    const out: Record<string, HostSessionMeta> = {}
+    const add = (id: unknown, item: unknown): void => {
+      if (typeof id !== 'string' || id.length === 0 || !isRecord(item)) return
+      // SessionSummary carries `parentId`/`origin`; a live Session nests them
+      // under `header` (`parentSession`/`origin`).
+      const header = isRecord(item.header) ? item.header : item
+      const parentRaw = header.parentSession ?? item.parentId ?? item.parentSession ?? null
+      const parentId =
+        typeof parentRaw === 'string'
+          ? parentRaw === ''
+            ? null
+            : parentRaw
+          : isRecord(parentRaw) && typeof parentRaw.id === 'string'
+            ? parentRaw.id
+            : null
+      const originRaw = header.origin ?? item.origin ?? null
+      out[id] = { parentId, origin: typeof originRaw === 'string' ? originRaw : null }
+    }
+    if (isRecord(state)) {
+      const byId = state.byId
+      if (isRecord(byId)) {
+        for (const [id, item] of Object.entries(byId)) add(id, item)
+      }
+      if (Array.isArray(state.ids)) {
+        for (const id of state.ids) {
+          if (typeof id !== 'string' || out[id] !== undefined) continue
+          add(id, isRecord(byId) ? byId[id] : undefined)
+        }
+      }
+      if (isRecord(byId) || Array.isArray(state.ids)) return out
+    }
+    if (state instanceof Map) {
+      for (const [key, item] of state) add(key, item)
+    } else if (Array.isArray(state)) {
+      for (const item of state) if (isRecord(item)) add(item.id, item)
+    } else if (isRecord(state)) {
+      for (const [key, item] of Object.entries(state)) add(key, item)
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function hostSessionType(
+  record: Record<string, unknown>,
+  sessionId: string,
+  sessionIndex: Record<string, HostSessionMeta>,
+): LedgerEntry['sessionType'] {
+  const declared = normalizeSessionType(record.sessionType) ?? 'unknown'
+  if (declared !== 'unknown') return declared
+  const meta = sessionIndex[sessionId]
+  if (meta !== undefined && (meta.origin === 'subagent' || (meta.parentId ?? '') !== '')) {
+    return 'subagent'
+  }
+  return 'unknown'
+}
+
+function hostCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : 0
+}
+
+/**
+ * Pure mapper from the host's `UsageRecord` list to ledger rows. Exported so
+ * the test suite can drive it without a running host.
+ */
+export function entriesForHostRecords(
+  records: readonly unknown[],
+  sessionIndex: Record<string, HostSessionMeta> = {},
+): LedgerEntry[] {
+  const entries: LedgerEntry[] = []
+  for (const candidate of records) {
+    if (!isRecord(candidate)) continue
+    const record = candidate
+    const atRaw = record.at
+    const at =
+      typeof atRaw === 'number' && Number.isFinite(atRaw) && atRaw > 0 ? atRaw : Number.NaN
+    if (!Number.isFinite(at)) continue
+    const rawSessionId =
+      typeof record.sessionId === 'string' && record.sessionId.length > 0
+        ? record.sessionId
+        : null
+    const hostId =
+      typeof record.id === 'string' && record.id.length > 0
+        ? record.id
+        : `h:${typeof record.seq === 'number' ? record.seq : at}`
+    const tier = peakTier(isPeakUtc(new Date(at)))
+
+    if (record.kind === 'tool') {
+      const tool = isRecord(record.serverTool) ? record.serverTool : null
+      const feeUsd =
+        tool !== null && typeof tool.feeUsd === 'number' && Number.isFinite(tool.feeUsd)
+          ? Math.max(0, tool.feeUsd)
+          : 0
+      if (feeUsd <= 0) continue
+      const name =
+        tool !== null && typeof tool.name === 'string' && tool.name.length > 0
+          ? tool.name
+          : 'server-tool'
+      const requests =
+        tool !== null && typeof tool.requests === 'number' && Number.isFinite(tool.requests)
+          ? Math.max(1, Math.round(tool.requests))
+          : 1
+      const sessionId = rawSessionId ?? 'server-tool'
+      entries.push({
+        id: hostId,
+        sessionId,
+        sessionTitle: cleanTitle(name) ?? 'server-tool',
+        date: localDateKey(at),
+        model: 'search',
+        tier,
+        usage: zeroUsage(),
+        costRmb: round4(feeUsd * USD_CNY),
+        at,
+        sessionType: hostSessionType(record, sessionId, sessionIndex),
+        source: 'host-tool',
+        hostId,
+        calls: requests,
+        costUsd: feeUsd,
+      })
+      continue
+    }
+
+    if (record.kind !== 'llm') continue
+    const rawUsage = isRecord(record.usage) ? record.usage : null
+    if (rawUsage === null) continue
+    const inputTokens = hostCount(rawUsage.inputTokens)
+    const outputTokens = hostCount(rawUsage.outputTokens)
+    const reasoningTokens = hostCount(rawUsage.reasoningTokens)
+    const cacheReadTokens = hostCount(rawUsage.cacheReadTokens)
+    const cacheWriteTokens = hostCount(rawUsage.cacheWriteTokens)
+    if (
+      inputTokens === 0 &&
+      outputTokens === 0 &&
+      reasoningTokens === 0 &&
+      cacheReadTokens === 0 &&
+      cacheWriteTokens === 0
+    ) {
+      continue
+    }
+    const modelText =
+      typeof record.model === 'string' && record.model.length > 0 ? record.model : ''
+    const provider = typeof record.provider === 'string' ? record.provider.toLowerCase() : ''
+    // Only DeepSeek-billed routes belong in the DeepSeek token/cost totals.
+    // Everything else keeps its tokens but is priced as `unattributed`, so it
+    // cannot pollute the flash/pro token sums with an invented model class.
+    const deepseekBilled = provider.includes('deepseek') || /^deepseek/i.test(modelText)
+    const modelClass: ModelClass = deepseekBilled
+      ? (classifyModelText(modelText) ?? 'flash')
+      : 'unattributed'
+    const sessionId = rawSessionId ?? 'unknown'
+    const usage: TokenUsage = {
+      uncachedInputTokens: inputTokens,
+      outputTokens: billedOutputTokens({ outputTokens, reasoningTokens }),
+      cacheReadTokens,
+      cacheWriteTokens,
+      reasoningTokens: reasoningTokens > 0 ? reasoningTokens : undefined,
+    }
+    entries.push({
+      id: hostId,
+      sessionId,
+      sessionTitle:
+        cleanTitle(record.purpose) ??
+        cleanTitle(record.agentPreset) ??
+        MODEL_LABELS[modelClass],
+      date: localDateKey(at),
+      model: modelClass,
+      tier,
+      usage,
+      costRmb: deepseekBilled ? usageCostRmb(usage, modelClass, tier === 'peak') : 0,
+      at,
+      reasoningTokens: usage.reasoningTokens,
+      sessionType: hostSessionType(record, sessionId, sessionIndex),
+      source: 'host',
+      hostId,
+      calls: 1,
+      costKnown: deepseekBilled ? undefined : false,
+    })
+  }
+  return entries
 }
 
 /**
@@ -1216,7 +1628,7 @@ function appendBalancePoint(balanceRmb: number, at: number): BalancePoint[] {
  * therefore ignored instead of producing a negative spend. Returns `null` when
  * the history cannot cover the window with at least two samples.
  */
-function apiSpendInWindow(
+export function apiSpendInWindow(
   points: readonly BalancePoint[],
   currentBalanceRmb: number | null,
   windowStartMs: number | null,
@@ -1245,6 +1657,357 @@ function apiSpendInWindow(
     spend += Math.max(0, series[index - 1].balanceRmb - series[index].balanceRmb)
   }
   return spend
+}
+
+/**
+ * A1/A2 reconciliation: when two balance samples bracket real API spend that
+ * the local ledger does not explain, the gap is Subagent / server-tool /
+ * background spend that never reached a projection. Emit one explicit row so
+ * the ledger sums to 100% of the measured API delta.
+ */
+export interface ReconciliationInput {
+  prevBalance: number
+  prevAt: number
+  newBalance: number
+  nowMs: number
+  entries: readonly LedgerEntry[]
+  /** Injected for callers that price differently; unused by the default plan. */
+  rateCardFor?: (model: ModelClass) => RateCard
+}
+
+export function planReconciliation(input: ReconciliationInput): LedgerEntry | null {
+  void input.rateCardFor
+  const { prevBalance, prevAt, newBalance, nowMs, entries } = input
+  const apiDelta = Math.max(0, prevBalance - newBalance)
+  const ledgerDelta = entries.reduce(
+    (sum, entry) =>
+      entry.source !== 'reconcile' && entry.at > prevAt && entry.at <= nowMs
+        ? sum + entryCostRmb(entry)
+        : sum,
+    0,
+  )
+  const diff = apiDelta - ledgerDelta
+  if (!(diff > 0.005)) return null
+  return {
+    id: makeEntryId(),
+    sessionId: 'reconcile:balance',
+    sessionTitle: 'Unattributed / Subagent & Tool Spend',
+    date: localDateKey(nowMs),
+    at: nowMs,
+    model: 'unattributed',
+    tier: peakTier(isPeakUtc(new Date(nowMs))),
+    costRmb: round4(diff),
+    usage: zeroUsage(),
+    source: 'reconcile',
+    sessionType: 'reconcile',
+    calls: 0,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// D1 — dashboard export import. Accepts JSON envelopes/rows and CSV/TSV with
+// the column aliases the DeepSeek dashboard (and older exports) emit.
+// ---------------------------------------------------------------------------
+
+const DASHBOARD_ALIASES: Record<string, readonly string[]> = {
+  date: ['date', 'day', 'timestamp', 'createdat', 'time'],
+  model: ['model', 'modelname'],
+  apiKey: ['apikey', 'apikeyname', 'keyname', 'key'],
+  input: ['input', 'inputtokens', 'prompttokens', 'uncachedinputtokens'],
+  output: ['output', 'outputtokens', 'completiontokens'],
+  cacheHit: ['cachehit', 'cachehittokens', 'cachereadtokens'],
+  cacheMiss: [
+    'cachemiss',
+    'cachemisstokens',
+    'promptcachemisstokens',
+    'uncachedinput',
+    'uncachedinputtokens',
+  ],
+  cacheWrite: ['cachewrite', 'cachecreationtokens'],
+  cost: ['cost', 'amount', 'totalcost', 'charge', 'spend'],
+  currency: ['currency'],
+  requests: ['requests', 'requestcount'],
+}
+
+function normalizeHeader(value: unknown): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function dashboardFieldForHeader(value: unknown): string | null {
+  const normalized = normalizeHeader(value)
+  if (normalized.length === 0) return null
+  for (const [field, aliases] of Object.entries(DASHBOARD_ALIASES)) {
+    if (aliases.includes(normalized)) return field
+  }
+  return null
+}
+
+function dashboardNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed
+  }
+  return null
+}
+
+export function parseDashboardDate(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value < 1e11 ? Math.round(value * 1_000) : Math.round(value)
+  }
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  if (text.length === 0) return null
+  if (/^\d+$/.test(text)) {
+    const numeric = Number(text)
+    if (!Number.isFinite(numeric) || numeric <= 0) return null
+    return numeric < 1e11 ? numeric * 1_000 : numeric
+  }
+  const local = parseLocalDate(text)
+  if (local !== null) return local
+  const parsed = Date.parse(text)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+/** RFC4180-ish splitter: quoted fields, escaped quotes, CRLF, embedded delimiters. */
+function parseDelimitedRows(text: string, delimiter: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let quoted = false
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index]
+    if (quoted) {
+      if (character === '"') {
+        if (text[index + 1] === '"') {
+          field += '"'
+          index += 1
+        } else {
+          quoted = false
+        }
+      } else {
+        field += character
+      }
+      continue
+    }
+    if (character === '"') {
+      quoted = true
+    } else if (character === delimiter) {
+      row.push(field)
+      field = ''
+    } else if (character === '\n') {
+      row.push(field)
+      field = ''
+      rows.push(row)
+      row = []
+    } else if (character !== '\r') {
+      field += character
+    }
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field)
+    rows.push(row)
+  }
+  return rows.filter((candidate) => candidate.some((cell) => cell.trim() !== ''))
+}
+
+function pickDashboardField(
+  record: Record<string, unknown>,
+  field: string,
+): unknown {
+  const aliases = DASHBOARD_ALIASES[field] ?? []
+  for (const [key, value] of Object.entries(record)) {
+    if (aliases.includes(normalizeHeader(key))) return value
+  }
+  return undefined
+}
+
+function dashboardEntryFromFields(
+  picked: Record<string, unknown>,
+): LedgerEntry | null {
+  const at = parseDashboardDate(picked.date)
+  if (at === null) return null
+  const modelText = typeof picked.model === 'string' ? picked.model.trim() : ''
+  const cacheRead = dashboardNumber(picked.cacheHit)
+  // Exports may give the total prompt and the cache-hit count separately; in
+  // that case the uncached input is total - cacheHit. An explicit miss/uncached
+  // field is authoritative and must never be reduced again.
+  const explicitMiss =
+    picked.cacheMiss !== undefined ? dashboardNumber(picked.cacheMiss) : null
+  const totalPrompt = dashboardNumber(picked.input)
+  let input: number | null
+  if (explicitMiss !== null) input = explicitMiss
+  else if (totalPrompt !== null && cacheRead !== null && cacheRead > 0) {
+    input = Math.max(0, totalPrompt - cacheRead)
+  } else input = totalPrompt
+  const output = dashboardNumber(picked.output)
+  const cacheWrite = dashboardNumber(picked.cacheWrite)
+  const hasTokens =
+    input !== null || output !== null || cacheRead !== null || cacheWrite !== null
+  const costValue = dashboardNumber(picked.cost)
+  if (!hasTokens && costValue === null) return null
+  const currency = String(picked.currency ?? '').trim().toUpperCase()
+  const costRmb =
+    costValue === null
+      ? 0
+      : round4(Math.max(0, currency === 'USD' ? costValue * USD_CNY : costValue))
+  const usage: TokenUsage = {
+    uncachedInputTokens: input ?? 0,
+    outputTokens: output ?? 0,
+    cacheReadTokens: cacheRead ?? 0,
+    cacheWriteTokens: cacheWrite ?? 0,
+  }
+  const keyName =
+    typeof picked.apiKey === 'string' && picked.apiKey.trim().length > 0
+      ? picked.apiKey.trim()
+      : 'dashboard'
+  const sessionId = `import:${keyName}`
+  const model = classifyModelText(modelText) ?? 'flash'
+  const dateKey = localDateKey(at)
+  // A stable identity for dashboard rows: one (date, apiKey, model) row is the
+  // same logical row across re-imports, so a grown export replaces it instead of
+  // double counting. Without date/key/model identity, fall back to a rounded
+  // token+cost signature so identical replays still dedupe.
+  const hasStableIdentity = keyName !== 'dashboard' && modelText !== '' && dateKey !== ''
+  const importKey = `d${hashText(
+    hasStableIdentity
+      ? `${dateKey}|${keyName}|${modelText}`
+      : [
+          dateKey,
+          modelText,
+          Math.round(usage.uncachedInputTokens),
+          Math.round(usage.outputTokens),
+          Math.round(usage.cacheReadTokens),
+          Math.round(usage.cacheWriteTokens),
+          round4(costRmb),
+        ].join('|'),
+  )}`
+  return {
+    id: makeEntryId(),
+    sessionId,
+    sessionTitle: sessionId,
+    date: dateKey,
+    model,
+    tier: peakTier(isPeakUtc(new Date(at))),
+    usage,
+    costRmb,
+    at,
+    sessionType: 'import',
+    source: 'import',
+    calls: dashboardNumber(picked.requests) ?? 1,
+    importKey,
+  }
+}
+
+export interface DashboardImportResult {
+  entries: LedgerEntry[]
+  skipped: number
+  warnings: string[]
+}
+
+/**
+ * Parse a DeepSeek dashboard export (CSV / TSV / JSON) or a previously exported
+ * universal ledger. Never throws; unparseable rows are counted as `skipped`.
+ */
+export function parseDashboardExport(text: string, filename: string): DashboardImportResult {
+  const warnings: string[] = []
+  const entries: LedgerEntry[] = []
+  let skipped = 0
+  const trimmed = text.replace(/^\uFEFF/, '').trim()
+  if (trimmed.length === 0) {
+    return { entries, skipped, warnings: ['The file was empty.'] }
+  }
+
+  const isJsonCandidate = trimmed.startsWith('[') || trimmed.startsWith('{')
+  if (isJsonCandidate) {
+    let parsed: unknown = null
+    let parsedOk = false
+    try {
+      parsed = JSON.parse(trimmed)
+      parsedOk = true
+    } catch (error) {
+      warnings.push(
+        `JSON parse failed${error instanceof Error ? `: ${error.message}` : ''}.`,
+      )
+    }
+    if (parsedOk) {
+      let list: unknown[] | null = null
+      if (Array.isArray(parsed)) list = parsed
+      else if (isRecord(parsed)) {
+        for (const key of ['entries', 'data', 'items', 'rows']) {
+          if (Array.isArray(parsed[key])) {
+            list = parsed[key] as unknown[]
+            break
+          }
+        }
+      }
+      if (list === null) {
+        return { entries, skipped, warnings: [...warnings, 'No entries/data/items/rows array found.'] }
+      }
+      for (const candidate of list) {
+        if (!isRecord(candidate)) {
+          skipped += 1
+          continue
+        }
+        const canonical =
+          typeof candidate.sessionId === 'string' ||
+          isRecord(candidate.usage) ||
+          typeof candidate.tier === 'string'
+        if (canonical) {
+          const entry = normalizeEntry(candidate, 'import:ledger')
+          if (entry === null) skipped += 1
+          else entries.push(entry)
+          continue
+        }
+        const picked: Record<string, unknown> = {}
+        for (const field of Object.keys(DASHBOARD_ALIASES)) {
+          const value = pickDashboardField(candidate, field)
+          if (value !== undefined) picked[field] = value
+        }
+        const entry = dashboardEntryFromFields(picked)
+        if (entry === null) skipped += 1
+        else entries.push(entry)
+      }
+      return { entries, skipped, warnings }
+    }
+  }
+
+  const looksTabSeparated =
+    /\.tsv$/i.test(filename) ||
+    (trimmed.split('\n')[0]?.split('\t').length ?? 0) >
+      (trimmed.split('\n')[0]?.split(',').length ?? 0)
+  const rows = parseDelimitedRows(trimmed, looksTabSeparated ? '\t' : ',')
+  if (rows.length < 1) {
+    return { entries, skipped, warnings: [...warnings, 'No rows found.'] }
+  }
+  const header = rows[0].map((cell) => dashboardFieldForHeader(cell))
+  const knownColumns = header.some((field) => field !== null)
+  if (!knownColumns) {
+    return {
+      entries,
+      skipped,
+      warnings: [...warnings, 'No recognized dashboard columns in the header row.'],
+    }
+  }
+  for (let index = 1; index < rows.length; index += 1) {
+    const cells = rows[index]
+    const picked: Record<string, unknown> = {}
+    for (let column = 0; column < header.length; column += 1) {
+      const field = header[column]
+      if (field === null) continue
+      const value = cells[column]
+      if (value !== undefined && value.trim() !== '') picked[field] = value
+    }
+    const entry = dashboardEntryFromFields(picked)
+    if (entry === null) skipped += 1
+    else entries.push(entry)
+  }
+  if (entries.length === 0 && skipped === 0) {
+    warnings.push('The file had a header but no data rows.')
+  }
+  return { entries, skipped, warnings }
 }
 
 function encodeApiKey(value: string): string {
@@ -2801,6 +3564,10 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
   const [syncError, setSyncError] = useState<string | null>(null)
   const [syncNotice, setSyncNotice] = useState<string | null>(null)
   const [dataMessage, setDataMessage] = useState<string | null>(null)
+  // Host-collector probe state. `pending` on mount (first poll has not settled)
+  // and `active` both suppress the projection diff; only a confirmed-absent host
+  // half (`inactive`) lets the projection write ledger rows.
+  const [hostProbe, setHostProbe] = useState<HostProbeState>('pending')
 
   const hudRef = useRef<HTMLDivElement | null>(null)
   const positionRef = useRef<HudPosition>(position)
@@ -2808,6 +3575,7 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const syncInFlightRef = useRef(false)
   const lastSyncAttemptRef = useRef(0)
+  const hostPollInFlightRef = useRef(false)
 
   const propSessionId = sessionId == null ? null : String(sessionId)
   const sessionKey = propSessionId ?? domSessionId
@@ -2914,19 +3682,29 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
   )
 
   const modelTokens = useMemo(() => {
-    const totals: Record<ModelClass, number> = { flash: 0, pro: 0, search: 0 }
+    const totals: Record<ModelClass, number> = {
+      flash: 0,
+      pro: 0,
+      search: 0,
+      unattributed: 0,
+    }
     for (const entry of selectedEntries) totals[entry.model] += usageTotal(entry.usage)
     return totals
   }, [selectedEntries])
 
   const modelRows = useMemo<ModelRow[]>(() => {
-    const costs: Record<ModelClass, number> = { flash: 0, pro: 0, search: 0 }
+    const costs: Record<ModelClass, number> = {
+      flash: 0,
+      pro: 0,
+      search: 0,
+      unattributed: 0,
+    }
     for (const entry of selectedEntries) costs[entry.model] += entryCostRmb(entry)
     const total =
-      costs.flash + costs.pro + costs.search > 0
-        ? costs.flash + costs.pro + costs.search
+      costs.flash + costs.pro + costs.search + costs.unattributed > 0
+        ? costs.flash + costs.pro + costs.search + costs.unattributed
         : trueSelectedCost
-    const ids: ModelClass[] = ['flash', 'pro', 'search']
+    const ids: ModelClass[] = ['flash', 'pro', 'search', 'unattributed']
     return ids.map((id) => ({
       id,
       label: MODEL_LABELS[id],
@@ -2973,11 +3751,6 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
       modelTokens.pro,
     )} tok. Each delta is priced at the model and UTC peak/off-peak tier active when it arrived.`
 
-  const estimatedTurns =
-    displayedUsage.outputTokens <= 0
-      ? null
-      : Math.ceil(displayedUsage.outputTokens / TURN_OUTPUT_TOKENS)
-  const burnPerTurn = estimatedTurns === null ? null : trueSelectedCost / estimatedTurns
 
   const liveSessionCost = useMemo(
     () =>
@@ -3037,6 +3810,17 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
               ? '99+ d'
               : `${runwayDays.toFixed(runwayDays < 10 ? 1 : 0)} d`
 
+  // A1: when the API key is present the balance movement is the primary cost
+  // number. The ledger is still shown explicitly, but never claims to be the
+  // primary spend when measured samples exist. Computed before the budget gauge
+  // so "today" means the same thing in the Today card and the runway gauge.
+  const apiSpendToday = useMemo(
+    () => apiSpendInWindow(balanceHistory, trueBalance, dayStart, nowMs),
+    [balanceHistory, trueBalance, dayStart, nowMs],
+  )
+  const todayApiSpend = apiSpendToday !== null && apiKey.length > 0 ? apiSpendToday : null
+  const todayBudgetSpend = todayApiSpend ?? todaySpend
+
   // Dynamic daily budget: the true API balance spread across the target runway.
   const dailyTargetBudget =
     trueBalance !== null && targetRunwayDays > 0 ? trueBalance / targetRunwayDays : null
@@ -3044,8 +3828,8 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
     dailyTargetBudget === null
       ? null
       : dailyTargetBudget > 0
-        ? todaySpend / dailyTargetBudget
-        : todaySpend > 0
+        ? todayBudgetSpend / dailyTargetBudget
+        : todayBudgetSpend > 0
           ? Number.POSITIVE_INFINITY
           : 0
   const budgetPercentLabel =
@@ -3097,6 +3881,52 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
       : yuan(apiPeriodSpend)
   const reconciliationDrift =
     apiPeriodSpend === null ? null : apiPeriodSpend - ledgerPeriodSpend
+
+  // A1: when the API key is present the balance movement is the primary cost
+  // number. The ledger is still shown explicitly, but never claims to be the
+  // primary spend when measured samples exist.
+  const primaryUsesApi = apiPeriodSpend !== null && apiKey.length > 0
+  const primaryPeriodCost =
+    primaryUsesApi && apiPeriodSpend !== null ? apiPeriodSpend : trueSelectedCost
+  const primaryPeriodLabel = primaryUsesApi ? 'API balance Δ' : 'ledger estimate'
+  const todayDisplaySpend = todayApiSpend ?? todaySpend
+
+  // Exact recorded-call metrics replace the old ~600-tokens-per-turn guess.
+  const recordedCalls = useMemo(
+    () =>
+      selectedEntries.reduce(
+        (sum, entry) => sum + (typeof entry.calls === 'number' ? entry.calls : 1),
+        0,
+      ),
+    [selectedEntries],
+  )
+  const burnPerCall =
+    selectedEntries.length === 0 || recordedCalls <= 0
+      ? null
+      : primaryPeriodCost / Math.max(1, recordedCalls)
+
+  // Subagent / background / compaction share of the selected window. These
+  // calls are often invisible in the projection, so surface them explicitly.
+  const delegatedSummary = useMemo(() => {
+    let tokens = 0
+    let costRmb = 0
+    let calls = 0
+    let entries = 0
+    for (const entry of selectedEntries) {
+      if (
+        entry.sessionType !== 'subagent' &&
+        entry.sessionType !== 'background' &&
+        entry.sessionType !== 'compaction'
+      ) {
+        continue
+      }
+      entries += 1
+      tokens += usageTotal(entry.usage)
+      costRmb += entryCostRmb(entry)
+      calls += typeof entry.calls === 'number' && entry.calls > 0 ? entry.calls : 1
+    }
+    return { entries, tokens, costRmb, calls }
+  }, [selectedEntries])
 
   const elapsedDays = useMemo(() => {
     if (periodWindowStart === null) return 1
@@ -3242,6 +4072,79 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
     notifyLedgerChanged()
   }, [])
 
+  // Poll the host collector once at mount and then every 10s. Its records are
+  // authoritative (subagents, background turns and server tools included).
+  // Probe state machine: `pending` until the first poll settles; a valid 200
+  // means `active` (stays active, no TTL); a 404 or format mismatch means
+  // `inactive` (projection fallback); network errors/timeouts keep the previous
+  // state. The effect is mount-only so no dependency can cause re-probing.
+  useEffect(() => {
+    let cancelled = false
+    let timer = 0
+    const settle = (next: HostProbeState): void => {
+      if (!cancelled) setHostProbe(next)
+    }
+    const poll = async (): Promise<void> => {
+      if (hostPollInFlightRef.current) return
+      hostPollInFlightRef.current = true
+      const storedCursor = readStoredNumber(HOST_CURSOR_KEY, 0)
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), HOST_FETCH_TIMEOUT_MS)
+      try {
+        const response = await fetch(`${HOST_USAGE_ENDPOINT}?since=${storedCursor}`, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (response.status === 404) {
+          // The host half is not installed on this surface: project locally.
+          settle('inactive')
+          return
+        }
+        // Any other non-2xx is transient; keep the previous probe state and retry.
+        if (!response.ok) return
+        const payload: unknown = await response.json()
+        if (
+          !isRecord(payload) ||
+          payload.format !== 'usage-popup.host-usage' ||
+          payload.version !== 1 ||
+          !Array.isArray(payload.records) ||
+          typeof payload.cursor !== 'number'
+        ) {
+          settle('inactive')
+          return
+        }
+        const entries = entriesForHostRecords(payload.records, readSessionIndex())
+        const reset = hostCursorWasReset(payload.cursor, storedCursor, payload.reset)
+        if (entries.length > 0 || reset) {
+          const merged = mergeLedger(
+            mergeLedger(ledgerRef.current, readLedgerDatabase()),
+            entries,
+          )
+          writeUniversalLedger(merged)
+          ledgerRef.current = merged
+          if (!cancelled) setLedgerEntries(merged)
+          notifyLedgerChanged()
+        }
+        writeStored(HOST_CURSOR_KEY, String(payload.cursor))
+        settle('active')
+      } catch {
+        // Network error or timeout: keep the previous state (never flip to
+        // inactive, which would re-enable projection and double count).
+      } finally {
+        window.clearTimeout(timeout)
+        hostPollInFlightRef.current = false
+      }
+    }
+    void poll()
+    timer = window.setInterval(() => void poll(), HOST_REFRESH_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [])
+
   // Seed the balance history from the last persisted sync. Without this the
   // first new 5-minute sample would replace the only point we have, making the
   // API-measured period spend unavailable until two more syncs have passed.
@@ -3310,6 +4213,29 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
       writeAnchors(anchors)
     }
 
+    // While the host collector is live (or its first probe is still pending) it
+    // records every call for this session (including subagent traffic the
+    // projection never surfaces). Keep the anchor in sync silently — writing a
+    // ledger row here would double-count — so a later host outage resumes
+    // cleanly from the current totals.
+    if (resolveProjectionMode(hostProbe) === 'skip') {
+      if (
+        anchor === undefined ||
+        !sameUsage(usage, anchor.lastUsage) ||
+        anchor.lastModel !== attributed ||
+        anchor.sessionTitle !== sessionTitle
+      ) {
+        saveAnchor({
+          sessionId: sessionKey,
+          sessionTitle,
+          lastUsage: usage,
+          lastModel: attributed,
+          updatedAt: Date.now(),
+        })
+      }
+      return
+    }
+
     if (anchor === undefined) {
       // First sight of this Session: anchor at the current totals, record no
       // cost. Everything after this point is a true incremental delta.
@@ -3375,6 +4301,9 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
       usage: delta,
       costRmb: usageCostRmb(delta, attributed, tier === 'peak'),
       at,
+      reasoningTokens: delta.reasoningTokens,
+      sessionType: 'main',
+      source: 'projection',
     }
 
     // Merge with a fresh read (and the in-memory copy, in case storage is
@@ -3396,7 +4325,7 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
       lastModel: attributed,
       updatedAt: at,
     })
-  }, [usage, sessionKey, lastUsedModel, currentModel, sessionTitle])
+  }, [usage, sessionKey, lastUsedModel, currentModel, sessionTitle, hostProbe])
 
   // Keep the DOM fallbacks current without reading transcript text: model-seat
   // contributions write data-model-id / data-provider-id and aria-label, and
@@ -3499,10 +4428,43 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
       if (!Number.isFinite(balanceRmb)) throw new Error('CNY total_balance was not a number')
 
       const at = Date.now()
+      // Capture the previous sample *before* the new point is appended: it is
+      // the baseline for the automatic reconciliation below.
+      const previousPoints = readBalanceHistory()
+      const prior = previousPoints.filter((point) => point.at < at).slice(-1)[0]
+      const points = appendBalancePoint(balanceRmb, at)
+      // A2: reconcile the measured balance drop against the ledger for exactly
+      // this interval. A gap means subagent / server-tool / background spend
+      // that never reached the projection path; record it explicitly. This is
+      // best-effort and must never fail the balance sync itself.
+      try {
+        if (prior !== undefined) {
+          const reconciliation = planReconciliation({
+            prevBalance: prior.balanceRmb,
+            prevAt: prior.at,
+            newBalance: balanceRmb,
+            nowMs: at,
+            entries: readLedgerDatabase(),
+          })
+          if (reconciliation !== null) {
+            const merged = mergeLedger(
+              mergeLedger(ledgerRef.current, readLedgerDatabase()),
+              [reconciliation],
+            )
+            writeUniversalLedger(merged)
+            ledgerRef.current = merged
+            setLedgerEntries(merged)
+            notifyLedgerChanged()
+          }
+        }
+      } catch {
+        // Reconciliation is an enhancement; a failure must not surface as a
+        // sync error.
+      }
       const meta: BalanceMeta = { balanceRmb, syncedAt: at, currency: 'CNY' }
       writeStored(BALANCE_KEY, JSON.stringify(meta))
       setBalanceMeta(meta)
-      setBalanceHistory(appendBalancePoint(balanceRmb, at))
+      setBalanceHistory(points)
       setSyncError(null)
       setSyncNotice(null)
     } catch (error) {
@@ -3711,31 +4673,24 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
     if (file === undefined) return
     try {
       const text = await file.text()
-      const parsed: unknown = JSON.parse(text)
-      const rawEntries = Array.isArray(parsed)
-        ? parsed
-        : isRecord(parsed) && Array.isArray(parsed.entries)
-          ? parsed.entries
-          : null
-      if (rawEntries === null) throw new Error('No ledger entries array found in the JSON.')
-      const imported: LedgerEntry[] = []
-      for (const candidate of rawEntries) {
-        // Imported rows without a session id are still real spend: attribute them
-        // to a synthetic chat so the global Day / Week / Month totals include them.
-        const entry = normalizeEntry(candidate, 'imported:ledger')
-        if (entry !== null) imported.push(entry)
+      const parsed = parseDashboardExport(text, file.name)
+      const warnings =
+        parsed.warnings.length > 0 ? ` ${parsed.warnings.slice(0, 2).join(' ')}` : ''
+      if (parsed.entries.length === 0) {
+        setDataMessage(
+          `Imported 0 rows (skipped ${parsed.skipped}).${warnings}`.trim(),
+        )
+        return
       }
-      if (imported.length === 0) throw new Error('The file contained no valid ledger entries.')
       const current = mergeLedger(ledgerRef.current, readLedgerDatabase())
-      const merged = mergeLedger(current, imported)
+      const merged = replaceImportedEntries(current, parsed.entries)
       writeUniversalLedger(merged)
       ledgerRef.current = merged
       setLedgerEntries(merged)
       notifyLedgerChanged()
+      const added = merged.length - current.length
       setDataMessage(
-        `Imported ${(merged.length - current.length).toLocaleString()} new entries (${(
-          imported.length - (merged.length - current.length)
-        ).toLocaleString()} duplicates skipped).`,
+        `Imported ${added.toLocaleString()} rows (skipped ${parsed.skipped.toLocaleString()}).${warnings}`.trim(),
       )
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown import error.'
@@ -4037,11 +4992,20 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                 <div style={rightColumnStyle}>
                   <div
                     style={totalRowStyle}
-                    title="True tracked cost: every token delta is priced at the model and UTC peak/off-peak tier active when it arrived."
+                    title={
+                      primaryUsesApi
+                        ? 'Primary spend: the measured API balance decrease in this window (top-ups ignored).'
+                        : 'Ledger estimate: priced token deltas at the model and UTC peak/off-peak tier active when they arrived.'
+                    }
                   >
-                    <span style={totalNumberStyle}>{yuan(trueSelectedCost)}</span>
+                    <span style={totalNumberStyle}>
+                      {primaryUsesApi ? yuan(primaryPeriodCost) : `≈ ${yuan(primaryPeriodCost)}`}
+                    </span>
                     <span style={totalUnitStyle}>
-                      {timeframe === 'session' ? 'session cost' : `${timeframeLabel.toLowerCase()} cost`}
+                      {timeframe === 'session'
+                        ? 'session cost'
+                        : `${timeframeLabel.toLowerCase()} cost`}
+                      {primaryUsesApi ? ` · ${primaryPeriodLabel}` : ' · ledger estimate'}
                     </span>
                   </div>
 
@@ -4072,13 +5036,33 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                     </span>
                   </div>
 
+                  {burnPerCall !== null && (
+                    <div
+                      style={metricRowStyle}
+                      title={`Derived from recorded API calls in this window (${recordedCalls.toLocaleString()} call${
+                        recordedCalls === 1 ? '' : 's'
+                      }).`}
+                    >
+                      <span style={metricLabelStyle}>Avg burn / recorded call</span>
+                      <span style={metricValueStyle}>{yuan(burnPerCall)}</span>
+                    </div>
+                  )}
+
                   <div
                     style={metricRowStyle}
-                    title="Estimated selected-timeframe cost per assistant turn (estimated from output tokens at ~600 per turn)."
+                    title="Sum of the priced ledger entries in this window. Reconciliation rows are included so this can be compared with the API balance delta."
                   >
-                    <span style={metricLabelStyle}>Avg burn / turn</span>
-                    <span style={metricValueStyle}>{burnPerTurn === null ? '—' : yuan(burnPerTurn)}</span>
+                    <span style={metricLabelStyle}>Ledger total</span>
+                    <span style={metricValueStyle}>{yuan(ledgerPeriodSpend)}</span>
                   </div>
+
+                  {reconciliationDrift !== null && Math.abs(reconciliationDrift) >= 0.005 && (
+                    <div style={tinyHintStyle} title="Measured API balance Δ minus the ledger total for the same window.">
+                      API Δ vs ledger Δ:{' '}
+                      {`${reconciliationDrift >= 0 ? '+' : ''}${yuan(reconciliationDrift)}`} over{' '}
+                      {timeframeLabel.toLowerCase()}.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -4173,6 +5157,41 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                 </div>
               )}
 
+              {delegatedSummary.entries > 0 && (
+                <div style={sectionStyle}>
+                  <div style={sectionTitleRowStyle}>
+                    <span style={sectionTitleStyle}>Subagents &amp; background</span>
+                    <span style={sectionValueStyle}>
+                      {delegatedSummary.tokens === 0
+                        ? '—'
+                        : `${compactCount(delegatedSummary.tokens)} tok`}
+                    </span>
+                  </div>
+                  <div
+                    style={modelRowStyle}
+                    title={`${delegatedSummary.entries.toLocaleString()} recorded subagent/background/compaction ${
+                      delegatedSummary.entries === 1 ? 'entry' : 'entries'
+                    } · ${delegatedSummary.calls.toLocaleString()} call${
+                      delegatedSummary.calls === 1 ? '' : 's'
+                    }`}
+                  >
+                    <span aria-hidden="true" style={modelDotStyle(MODEL_COLORS.unattributed)} />
+                    <span style={modelNameStyle}>Delegated &amp; background</span>
+                    <span style={modelTokensStyle}>
+                      {delegatedSummary.tokens === 0
+                        ? '—'
+                        : `${compactCount(delegatedSummary.tokens)} tok`}
+                    </span>
+                    <span style={modelCostStyle}>{yuan(delegatedSummary.costRmb)}</span>
+                    <span style={modelShareStyle}>{`${delegatedSummary.calls}×`}</span>
+                  </div>
+                  <div style={tinyHintStyle}>
+                    Calls recorded by the host collector outside the main chat thread. Their cost is
+                    included in the totals above.
+                  </div>
+                </div>
+              )}
+
               {timeframe === 'session' && workerRows.length > 0 && (
                 <div style={sectionStyle}>
                   <div style={sectionTitleRowStyle}>
@@ -4236,8 +5255,19 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                     <span style={balanceMetricValueStyle}>{runwayLabel}</span>
                   </div>
                   <div style={balanceMetricStyle}>
-                    <span style={balanceMetricLabelStyle}>Today spend</span>
-                    <span style={balanceMetricValueStyle}>{yuan(todaySpend)}</span>
+                    <span
+                      style={balanceMetricLabelStyle}
+                      title={
+                        todayApiSpend !== null
+                          ? 'API balance decrease since local midnight (top-ups ignored)'
+                          : 'Ledger spend since local midnight'
+                      }
+                    >
+                      Today · {todayApiSpend !== null ? 'API Δ' : 'ledger'}
+                    </span>
+                    <span style={balanceMetricValueStyle}>
+                      {todayApiSpend !== null ? yuan(todayApiSpend) : `≈ ${yuan(todayDisplaySpend)}`}
+                    </span>
                   </div>
                   <div style={balanceMetricStyle}>
                     <span
@@ -4250,8 +5280,8 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                       style={balanceMetricValueStyle}
                       title={
                         periodSpendIsEstimate
-                          ? 'Not enough API balance samples in this window yet; showing the local ledger estimate.'
-                          : `Measured from ${balanceHistory.length} API balance samples.`
+                          ? 'Not enough /user/balance samples in this window yet; showing the local ledger estimate.'
+                          : `Measured from ${balanceHistory.length} /user/balance samples.`
                       }
                     >
                       {periodSpendLabel}
@@ -4294,7 +5324,8 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                 </div>
                 <div style={budgetCaptionRowStyle}>
                   <span>
-                    Today {yuan(todaySpend)} / {dailyTargetBudget === null ? '—' : yuan(dailyTargetBudget)}
+                    Today {yuan(todayDisplaySpend)} / {dailyTargetBudget === null ? '—' : yuan(dailyTargetBudget)}
+                    {todayApiSpend !== null ? ' · API Δ' : ' · ledger'}
                   </span>
                   <span
                     style={
@@ -4376,11 +5407,6 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                 )}
 
                 <div style={tinyHintStyle}>
-                  {reconciliationDrift !== null && Math.abs(reconciliationDrift) >= 0.005
-                    ? `API Δ vs ledger Δ: ${reconciliationDrift >= 0 ? '+' : ''}${yuan(
-                        reconciliationDrift,
-                      )} over ${timeframeLabel.toLowerCase()}. `
-                    : ''}
                   {apiKey.length === 0
                     ? 'Add a DeepSeek API key to auto-sync the true CNY balance.'
                     : balanceMeta === null
@@ -4404,7 +5430,7 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   style={miniButtonStyle}
-                  title="Merge a previously exported universal ledger"
+                  title="Merge a universal ledger JSON export or a DeepSeek dashboard CSV / TSV / JSON export"
                 >
                   Import
                 </button>
@@ -4422,7 +5448,7 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="application/json,.json"
+                  accept=".json,.csv,.tsv,application/json,text/csv,text/tab-separated-values"
                   onChange={(event) => void importLedger(event)}
                   style={{ display: 'none' }}
                 />

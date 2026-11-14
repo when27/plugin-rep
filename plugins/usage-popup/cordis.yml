@@ -11,4 +11,4 @@
 
 - insert:
     - id: usage-popup
-      name: 'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/usage-popup/src/index.tsx'
+      name: 'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/plugins/usage-popup/src/index.tsx'
