@@ -1,0 +1,392 @@
+--- a/lib/schema.js
++++ b/lib/schema.js
+@@ -1,3 +34,14 @@
+ export const PROVIDER = 'tier-router'
+ /** Model id of the virtual router model. */
+ export const MODEL = 'smart'
++
++/**
++ * Model id of the virtual "fetch boy" model: it skips classification and
++ * always uses the easy chain (easyProvider → easyFallbacks). Delegated
++ * subagents select this seat when they must run on the cheap Google/Z.ai
++ * keys instead of the session default route.
++ */
++export const WORKER = 'worker'
+@@ -58,6 +66,14 @@
+   hardProvider: 'codex-local',
+   hardModel: 'gpt-6-astra',
+   hardEffort: '',
++  hardFallbacks: [],
+   normalProvider: 'codex-local',
+   normalModel: 'gpt-5.5',
+   normalEffort: '',
+   easyProvider: 'gpudev',
+   easyModel: 'qwen3.8-27b-q5',
+   easyEffort: '',
++  easyFallbacks: [],
+@@ -104,6 +114,12 @@
+   // an exhausted quota that surfaces only as a connection timeout.
+   routeFailureThreshold: 2,
+ })
++
++/** A `[{ provider, model }]` fallback list (vision and difficulty tiers). */
++const fallbackField = () => z.array(z.object({
++  provider: z.string().default(''),
++  model: z.string().default(''),
++})).default([])
+ 
+ /** Settings schema for the `tier-router` namespace. */
+ export const SETTINGS_SCHEMA = z.object({
+@@ -124,10 +129,20 @@
+   hardProvider: routeField(),
+   hardModel: routeField(),
+   hardEffort: routeField(),
++  hardFallbacks: fallbackField(),
+   normalProvider: routeField(),
+   normalModel: routeField(),
+   normalEffort: routeField(),
+   easyProvider: routeField(),
+   easyModel: routeField(),
+   easyEffort: routeField(),
++  easyFallbacks: fallbackField(),
+   visionEffort: routeField(),
+   visionMode: z.string().default('replace'),
+   visionCacheTtl: z.number().default(3600),
+-  visionFallbacks: z.array(z.object({
+-    provider: z.string().default(''),
+-    model: z.string().default(''),
+-  })).default([]),
+   visionMode: z.string().default('replace'),
+   visionCacheTtl: z.number().default(3600),
++  visionFallbacks: fallbackField(),
+   fallbackProvider: routeField(),
+   fallbackModel: routeField(),
+   llmClassifierProvider: routeField(),
+@@ -184,6 +199,15 @@
+     model: String(settings[`${tier}Model`] ?? ''),
+     effort: String(settings[`${tier}Effort`] ?? ''),
+   }
++}
++
++/**
++ * Read one tier's ordered fallback list. Old single-route configurations have
++ * no `easyFallbacks` / `hardFallbacks` key and resolve to an empty list.
++ */
++export function tierFallbacks(settings, tier) {
++  const list = settings?.[`${tier}Fallbacks`]
++  return Array.isArray(list) ? list : []
+ }
+ 
+ /** Read the explicit default route (settings-level fallback). */
+--- a/lib/router.js
++++ b/lib/router.js
+@@ -20,8 +20,8 @@
+ 
+ import { LlmAdapter, contentHasImage } from '@deepseek-ai/dsh-llm'
+ import {
+-  DEFAULTS, MODEL, PROVIDER,
+-  fallbackRoute, normalizeRoute, routeConfigured, tierFallbackOrder, tierRoute,
++  DEFAULTS, MODEL, PROVIDER, WORKER,
++  fallbackRoute, normalizeRoute, routeConfigured, tierFallbackOrder, tierFallbacks, tierRoute,
+ } from './schema.js'
+ import { CLASSIFIER_SYSTEM_PROMPT, classifierInput, classifierRoute, classifierUserPrompt, classifyDifficulty, parseClassifierReply } from './classifier.js'
+ import {
+@@ -97,6 +97,33 @@
+   const fromRoute = error?.routeFailure?.message
+   if (typeof fromRoute === 'string' && fromRoute !== '') return fromRoute
+   return typeof error?.message === 'string' ? error.message : ''
++}
++
++/** A plain-UUID session id is a delegated subagent ("fetch boy") session. */
++const WORKER_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
++/** Keep the per-session map bounded; the HUD only reads the active one. */
++const USAGE_SESSION_LIMIT = 80
++
++function emptyUsageBuckets() {
++  return { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
++}
++
++function nonnegativeTokenCount(value) {
++  const number = Number(value)
++  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0
++}
++
++/** One billed call's usage into a bucket. */
++function addUsageBuckets(into, sample) {
++  into.calls += 1
++  into.inputTokens += nonnegativeTokenCount(sample.inputTokens)
++  into.outputTokens += nonnegativeTokenCount(sample.outputTokens)
++  into.cacheReadTokens += nonnegativeTokenCount(sample.cacheReadTokens)
++  into.cacheWriteTokens += nonnegativeTokenCount(sample.cacheWriteTokens)
++}
++
++function usageMapSnapshot(map) {
++  return Object.fromEntries([...map].map(([key, value]) => [key, { ...value }]))
+ }
+ 
+ /**
+@@ -119,6 +146,22 @@
+   const turns = { hard: 0, normal: 0, easy: 0, vision: 0, total: 0 }
+   const errors = []
+   const decisions = []
++  /**
++   * Local, provider-independent token accounting for every routed call.
++   *
++   * This is deliberately NOT a billing reconciliation: it records the usage
++   * chunk each adapter reported, so the client can show tokens per model
++   * (DeepSeek, Gemini, GLM, ...) without calling any provider API. Entries are
++   * keyed by session so the HUD can show the open chat and, separately, the
++   * delegated "fetch boy" sessions (whose ids are plain UUIDs).
++   */
++  const usage = {
++    totals: emptyUsageBuckets(),
++    byModel: new Map(),
++    sessions: new Map(),
++    workers: new Map(),
++    updatedAt: 0,
++  }
+   /** Identity of the turn currently in progress (see `recordTurn`). */
+   let lastTurnKey
+   return {
+@@ -240,7 +281,79 @@
+         },
+       })
+       if (decisions.length > 20) decisions.shift()
++    },
++    /**
++     * Record the usage one routed attempt reported (the terminal `usage`
++     * chunk). Local only: no provider balance API is consulted.
++     *
++     * @param {string|undefined} sessionId - the request's session id.
++     * @param {string} provider - the route that answered.
++     * @param {string} model - the model that answered.
++     * @param {object} sample - `TokenUsage` (`inputTokens`, `outputTokens`, ...).
++     */
++    recordUsage(sessionId, provider, model, sample) {
++      if (sample === null || typeof sample !== 'object') return
++      const buckets = {
++        calls: 1,
++        inputTokens: nonnegativeTokenCount(sample.inputTokens ?? sample.uncachedInputTokens),
++        outputTokens: nonnegativeTokenCount(sample.outputTokens),
++        cacheReadTokens: nonnegativeTokenCount(sample.cacheReadTokens),
++        cacheWriteTokens: nonnegativeTokenCount(sample.cacheWriteTokens),
++      }
++      if (buckets.inputTokens + buckets.outputTokens + buckets.cacheReadTokens + buckets.cacheWriteTokens === 0) return
++      const providerId = String(provider ?? '')
++      const modelId = String(model ?? '')
++      const key = `${providerId}/${modelId}`
++      addUsageBuckets(usage.totals, buckets)
++      const modelEntry = usage.byModel.get(key) ?? { provider: providerId, model: modelId, ...emptyUsageBuckets() }
++      addUsageBuckets(modelEntry, buckets)
++      usage.byModel.set(key, modelEntry)
++
++      const sid = sessionId === undefined || sessionId === null || String(sessionId) === ''
++        ? '(unknown)'
++        : String(sessionId)
++      let session = usage.sessions.get(sid)
++      if (session === undefined) {
++        session = { total: emptyUsageBuckets(), byModel: new Map(), updatedAt: 0 }
++        usage.sessions.set(sid, session)
++      }
++      addUsageBuckets(session.total, buckets)
++      const sessionModel = session.byModel.get(key) ?? { provider: providerId, model: modelId, ...emptyUsageBuckets() }
++      addUsageBuckets(sessionModel, buckets)
++      session.byModel.set(key, sessionModel)
++      session.updatedAt = Date.now()
++
++      if (WORKER_SESSION_ID.test(sid)) {
++        const worker = usage.workers.get(key) ?? { provider: providerId, model: modelId, ...emptyUsageBuckets() }
++        addUsageBuckets(worker, buckets)
++        usage.workers.set(key, worker)
++      }
++      usage.updatedAt = Date.now()
++      while (usage.sessions.size > USAGE_SESSION_LIMIT) {
++        usage.sessions.delete(usage.sessions.keys().next().value)
++      }
+     },
+     snapshot() {
+-      return { ...counts, turns: { ...turns }, errors: [...errors], decisions: [...decisions] }
++      return {
++        ...counts,
++        turns: { ...turns },
++        errors: [...errors],
++        decisions: [...decisions],
++        usage: {
++          totals: { ...usage.totals },
++          byModel: usageMapSnapshot(usage.byModel),
++          sessions: Object.fromEntries([...usage.sessions].map(([sid, session]) => [
++            sid,
++            {
++              total: { ...session.total },
++              byModel: usageMapSnapshot(session.byModel),
++              updatedAt: session.updatedAt,
++            },
++          ])),
++          workers: usageMapSnapshot(usage.workers),
++          updatedAt: usage.updatedAt,
++        },
++      }
+     },
+   }
+ }
+@@ -602,8 +700,41 @@
+   }
+ 
+   listModels(provider) {
++    const reasoning = {
++      efforts: [
++        { id: 'off', name: 'Off', description: 'No extended reasoning' },
++        { id: 'high', name: 'High', description: 'High reasoning effort' },
++      ],
++      defaultEffort: 'off',
++    }
+     return Promise.resolve([
+       {
+         provider,
+         id: MODEL,
+         name: 'Tier Router (auto)',
+         description: 'Routes by difficulty (hard / normal / easy) and by vision need; configure the tiers in Settings → Tier Router',
++        inputModalities: ['text', 'image'],
++      },
++      {
++        provider,
++        id: WORKER,
++        name: 'Tier Router (worker)',
++        description: 'Always uses the easy/fetch-boy chain (google → google-vertex → zai → zai-2); no difficulty classification',
+         inputModalities: ['text', 'image'],
++        reasoning,
+       },
+     ])
+   }
+ 
+   resolveModel(provider, model, _signal) {
++    const worker = model === WORKER
+     return Promise.resolve({
+       provider,
+       id: model,
+-      name: 'Tier Router (auto)',
+-      description: 'Routes by difficulty (hard / normal / easy) and by vision need',
++      name: worker ? 'Tier Router (worker)' : 'Tier Router (auto)',
++      description: worker
++        ? 'Always uses the easy/fetch-boy chain; no difficulty classification'
++        : 'Routes by difficulty (hard / normal / easy) and by vision need',
+       inputModalities: ['text', 'image'],
+       // The chat input selector exposes only Off / On (High):
+       //   Off → reasoning disabled for ALL tiers (master switch)
+@@ -737,7 +868,41 @@
+ 
+     const state = buildRoutingState(options, { estimatedTokens: estimate, hasImage })
+     const startedAt = Date.now()
+-    const decision = await this.classifyRequest(state, settings, options.signal)
++    // `worker` is the forced fetch-boy seat: no difficulty classification,
++    // always the easy chain (its fallbacks ending at the default route). The
++    // architect seat keeps `smart` and its heuristic/LLM/jev classifier.
++    const forcedWorker = options.model === WORKER
++    const decision = forcedWorker
++      ? {
++          level: 'easy',
++          cause: 'worker model → forced easy/fetch-boy chain',
++          classifier: 'worker',
++          inputChars: text.length,
++          fingerprint: '',
++        }
++      : await this.classifyRequest(state, settings, options.signal)
+     timings.classifyMs = Date.now() - startedAt
+     const { level, cause, classifier, inputChars, fingerprint } = decision
+     const stateChars = routingStateInput(state).length
+ 
+     const requested = normalizeRoute(tierRoute(settings, level))
+     pushIfRoutable(requested, `${level} tier`)
++    // Per-tier fallbacks sit between their tier and the next one: an easy
++    // request whose primary route cannot serve tries the rest of the configured
++    // easy chain before escalating. Old single-route configs have no lists, so
++    // the chain is unchanged for them.
++    for (const fb of tierFallbacks(settings, level)) {
++      pushIfRoutable(fb, `${level} tier fallback`)
++    }
+     // Nearest tier first (`tierFallbackOrder`), so an easy request the local
+     // model could not take lands on `normal` instead of escalating straight to
+     // `hard` — the route that is both the most expensive and the one that runs
+     // out of quota.
+     for (const tier of tierFallbackOrder(level)) {
+       pushIfRoutable(tierRoute(settings, tier), `${tier} tier (fallback)`)
++      for (const fb of tierFallbacks(settings, tier)) {
++        pushIfRoutable(fb, `${tier} tier fallback`)
++      }
+@@ -1254,26 +1407,36 @@
+     // any adapter that fails after opening a block but before filling it.
+     let produced = false
+     let failed
+-    for await (const chunk of prepared.stream(forwarded)) {
+-      if (chunk?.type === 'finish' && chunk.reason?.kind === 'aborted') {
++    // One adapter stream reports one settled usage sample (possibly after
++    // several cumulative updates). Keep the last sample and add it once, so a
++    // streaming adapter cannot inflate the local model totals.
++    let billedUsage = null
++    try {
++      for await (const chunk of prepared.stream(forwarded)) {
++        if (chunk?.type === 'usage') billedUsage = chunk.usage ?? billedUsage
++        if (chunk?.type === 'finish' && chunk.reason?.kind === 'aborted') {
++          yield chunk
++          return { failed: true, code: 'ABORTED', message: 'delegated stream aborted' }
++        }
++        if (chunk && chunk.type === 'finish' && chunk.reason && chunk.reason.kind === 'error') {
++          const failure = chunk.reason.failure
++          failed = { code: String(failure?.code ?? ''), message: String(failure?.message ?? 'delegated stream failed') }
++          this.stats.recordError(`${target.provider}/${target.model}`, failed.message, failed.code)
++          if (!produced) {
++            // Fail before any output: throw so the chain tries the next route.
++            // Health is folded in by the caller, which sees the same throw.
++            throw Object.assign(
++              new Error(`route ${target.provider}/${target.model} failed before any output: ${failure?.message ?? 'unknown'}`),
++              { routeFailure: failure },
++            )
++          }
++        }
++        if (CONTENT_CHUNK_TYPES.has(chunk?.type)) produced = true
+         yield chunk
+-        return { failed: true, code: 'ABORTED', message: 'delegated stream aborted' }
+       }
+-      if (chunk && chunk.type === 'finish' && chunk.reason && chunk.reason.kind === 'error') {
+-        const failure = chunk.reason.failure
+-        failed = { code: String(failure?.code ?? ''), message: String(failure?.message ?? 'delegated stream failed') }
+-        this.stats.recordError(`${target.provider}/${target.model}`, failed.message, failed.code)
+-        if (!produced) {
+-          // Fail before any output: throw so the chain tries the next route.
+-          // Health is folded in by the caller, which sees the same throw.
+-          throw Object.assign(
+-            new Error(`route ${target.provider}/${target.model} failed before any output: ${failure?.message ?? 'unknown'}`),
+-            { routeFailure: failure },
+-          )
+-        }
++    } finally {
++      if (billedUsage !== null) {
++        this.stats.recordUsage(options.sessionId, target.provider, target.model, billedUsage)
+       }
+-      if (CONTENT_CHUNK_TYPES.has(chunk?.type)) produced = true
+-      yield chunk
+     }
+     // Output already reached the caller, so there is nothing to fall back to;
+--- a/lib/models-api.js
++++ b/lib/models-api.js
+@@ -1,3 +29,10 @@
+   'classifier',
+   'hardScore',
+   'hardProvider', 'hardModel', 'hardEffort',
++  'hardFallbacks',
+   'normalProvider', 'normalModel', 'normalEffort',
+   'easyProvider', 'easyModel', 'easyEffort',
++  'easyFallbacks',
+@@ -214,6 +216,12 @@
+       }
+       if (req.method === 'GET' && path === '/tier-router/api/stats') {
+         sendJson(res, 200, { stats: getStats().snapshot() })
++        return
++      }
++      if (req.method === 'GET' && path === '/tier-router/api/usage') {
++        // Local per-model / per-session token counters only; no provider
++        // balance or billing API is involved.
++        sendJson(res, 200, { usage: getStats().snapshot().usage })
+         return
+       }
+       if (req.method === 'GET' && path === '/tier-router/api/config') {

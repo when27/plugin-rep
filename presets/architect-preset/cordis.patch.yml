@@ -1,0 +1,60 @@
+- insert:
+    - id: preset-architect
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        # @deepseek-ai/dsh-agent-preset Config schema:
+        #   id: required string; plugins: required array;
+        #   name/description: optional string; order: optional number.
+        id: architect
+        name: Architect
+        description: "Delegates to workers; the main agent has no file/shell tools."
+        order: 20
+        plugins:
+          # Only install-resolvable (@deepseek-ai/*) specifiers belong here.
+          # A preset realm resolves its rows against the install base, so the
+          # `@local/*` restriction plugin cannot mount here — it is declared in
+          # the profile patch instead.
+          #
+          # FILE/SHELL TOOLS ARE MOUNTED HERE ON PURPOSE. A delegated child
+          # inherits the parent's preset (its session header records
+          # agentPreset: architect), so a preset without these rows gives every
+          # worker an empty tool surface. The profile plugin then denies these
+          # names for the MAIN agent only (scope = architect, non-subagent),
+          # leaving them available to lineage workers.
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          # Delegation: `tool-subagent-fork` is a ROW id, not a package; the
+          # shipped presets mount dsh-tool-subagent twice with an explicit
+          # provider. Config values must match the CURRENT build's schemas:
+          #   dsh-tool-subagent: provider is REQUIRED (spawn|fork);
+          #   dsh-tool-todo:     allowParallelInProgress is REQUIRED (boolean).
+          - id: tool-subagent-control
+            name: '@deepseek-ai/dsh-tool-subagent-control'
+          - id: tool-subagent
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: subagent
+          - id: tool-subagent-fork
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: fork
+              toolName: subagent_fork
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true

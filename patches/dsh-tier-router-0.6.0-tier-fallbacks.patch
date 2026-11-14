@@ -1,0 +1,203 @@
+diff --git a/cordis.patch.yml b/cordis.patch.yml
+index 2eef0cc..a6ba818 100644
+--- a/cordis.patch.yml
++++ b/cordis.patch.yml
+@@ -117,13 +117,11 @@
+ 
+ # dsh-tier-router: virtual provider "tier-router" / model "smart".
+ # Hard and fallback tiers start on the DeepSeek account route. Easy turns
+-# start on Gemini, and image work gets an explicit free-tier chain:
++# start on Gemini and then follow the explicit easy fallback chain:
+ # google → google-vertex → zai → zai-2 → deepseek-account.
+-# NOTE: dsh-tier-router 0.6.0 accepts one provider per difficulty tier and
+-# has no per-tier fallback arrays, so the requested easy chain cannot be
+-# represented; easy rate limits advance to normal (DeepSeek), and a failed
+-# hard route can still degrade through the easy tier. Only visionFallbacks
+-# is a real provider chain.
++# dsh-tier-router 0.6.0 is patched in place with per-tier fallback arrays
++# (easyFallbacks / hardFallbacks), matching the existing visionFallbacks.
++# `hard` keeps its existing route; only easyFallbacks is configured here.
+ - id: tier-router
+   name: dsh-tier-router
+   config:
+@@ -141,6 +139,13 @@
+     easyProvider: google
+     easyModel: gemini-3.5-flash
+     easyEffort: ''
++    easyFallbacks:
++      - provider: google-vertex
++        model: gemini-3.5-flash
++      - provider: zai
++        model: glm-5.3-flash
++      - provider: zai-2
++        model: glm-5.3-flash
+ 
+     visionProvider: google
+     visionModel: gemini-3.5-flash
+diff --git a/node_modules/dsh-tier-router/lib/models-api.js b/node_modules/dsh-tier-router/lib/models-api.js
+index 354520c..d88dc02 100644
+--- a/node_modules/dsh-tier-router/lib/models-api.js
++++ b/node_modules/dsh-tier-router/lib/models-api.js
+@@ -29,8 +29,10 @@ const CONFIG_FIELDS = new Set([
+   'classifier',
+   'hardScore',
+   'hardProvider', 'hardModel', 'hardEffort',
++  'hardFallbacks',
+   'normalProvider', 'normalModel', 'normalEffort',
+   'easyProvider', 'easyModel', 'easyEffort',
++  'easyFallbacks',
+   'visionProvider', 'visionModel', 'visionEffort',
+   'visionMode', 'visionCacheTtl',
+   'visionFallbacks',
+diff --git a/node_modules/dsh-tier-router/lib/router.js b/node_modules/dsh-tier-router/lib/router.js
+index 70aa61b..500b617 100644
+--- a/node_modules/dsh-tier-router/lib/router.js
++++ b/node_modules/dsh-tier-router/lib/router.js
+@@ -21,7 +21,7 @@ export { isHumanMessage, isToolResultMessage, blocksText } from './routing-state
+ import { LlmAdapter, contentHasImage } from '@deepseek-ai/dsh-llm'
+ import {
+   DEFAULTS, MODEL, PROVIDER,
+-  fallbackRoute, normalizeRoute, routeConfigured, tierFallbackOrder, tierRoute,
++  fallbackRoute, normalizeRoute, routeConfigured, tierFallbackOrder, tierFallbacks, tierRoute,
+ } from './schema.js'
+ import { CLASSIFIER_SYSTEM_PROMPT, classifierInput, classifierRoute, classifierUserPrompt, classifyDifficulty, parseClassifierReply } from './classifier.js'
+ import {
+@@ -744,12 +744,22 @@ export class TierRouterAdapter extends LlmAdapter {
+ 
+     const requested = normalizeRoute(tierRoute(settings, level))
+     pushIfRoutable(requested, `${level} tier`)
++    // Per-tier fallbacks sit between their tier and the next one: an easy
++    // request whose primary route cannot serve tries the rest of the configured
++    // easy chain before escalating. Old single-route configs have no lists, so
++    // the chain is unchanged for them.
++    for (const fb of tierFallbacks(settings, level)) {
++      pushIfRoutable(fb, `${level} tier fallback`)
++    }
+     // Nearest tier first (`tierFallbackOrder`), so an easy request the local
+     // model could not take lands on `normal` instead of escalating straight to
+     // `hard` — the route that is both the most expensive and the one that runs
+     // out of quota.
+     for (const tier of tierFallbackOrder(level)) {
+       pushIfRoutable(tierRoute(settings, tier), `${tier} tier (fallback)`)
++      for (const fb of tierFallbacks(settings, tier)) {
++        pushIfRoutable(fb, `${tier} tier fallback`)
++      }
+     }
+     pushIfRoutable(defaultRoute, 'default model')
+     const guardedChain = await guard(chain)
+diff --git a/node_modules/dsh-tier-router/lib/schema.js b/node_modules/dsh-tier-router/lib/schema.js
+index 1050f40..c65e091 100644
+--- a/node_modules/dsh-tier-router/lib/schema.js
++++ b/node_modules/dsh-tier-router/lib/schema.js
+@@ -58,12 +58,14 @@ export const DEFAULTS = Object.freeze({
+   hardProvider: 'codex-local',
+   hardModel: 'gpt-6-astra',
+   hardEffort: '',
++  hardFallbacks: [],
+   normalProvider: 'codex-local',
+   normalModel: 'gpt-5.5',
+   normalEffort: '',
+   easyProvider: 'gpudev',
+   easyModel: 'qwen3.8-27b-q5',
+   easyEffort: '',
++  easyFallbacks: [],
+   visionProvider: 'codex-local',
+   visionModel: 'gpt-6-astra',
+   visionEffort: '',
+@@ -105,6 +107,12 @@ export const DEFAULTS = Object.freeze({
+   routeFailureThreshold: 2,
+ })
+ 
++/** A `[{ provider, model }]` fallback list (vision and difficulty tiers). */
++const fallbackField = () => z.array(z.object({
++  provider: z.string().default(''),
++  model: z.string().default(''),
++})).default([])
++
+ /** Settings schema for the `tier-router` namespace. */
+ export const SETTINGS_SCHEMA = z.object({
+   enabled: z.boolean().default(true),
+@@ -113,21 +121,20 @@ export const SETTINGS_SCHEMA = z.object({
+   hardProvider: routeField(),
+   hardModel: routeField(),
+   hardEffort: routeField(),
++  hardFallbacks: fallbackField(),
+   normalProvider: routeField(),
+   normalModel: routeField(),
+   normalEffort: routeField(),
+   easyProvider: routeField(),
+   easyModel: routeField(),
+   easyEffort: routeField(),
++  easyFallbacks: fallbackField(),
+   visionProvider: routeField(),
+   visionModel: routeField(),
+   visionEffort: routeField(),
+   visionMode: z.string().default('replace'),
+   visionCacheTtl: z.number().default(3600),
+-  visionFallbacks: z.array(z.object({
+-    provider: z.string().default(''),
+-    model: z.string().default(''),
+-  })).default([]),
++  visionFallbacks: fallbackField(),
+   fallbackProvider: routeField(),
+   fallbackModel: routeField(),
+   llmClassifierProvider: routeField(),
+@@ -186,6 +193,15 @@ export function tierRoute(settings, tier) {
+   }
+ }
+ 
++/**
++ * Read one tier's ordered fallback list. Old single-route configurations have
++ * no `easyFallbacks` / `hardFallbacks` key and resolve to an empty list.
++ */
++export function tierFallbacks(settings, tier) {
++  const list = settings?.[`${tier}Fallbacks`]
++  return Array.isArray(list) ? list : []
++}
++
+ /** Read the explicit default route (settings-level fallback). */
+ export function fallbackRoute(settings) {
+   return {
+diff --git a/node_modules/dsh-tier-router/lib/types/index.d.ts b/node_modules/dsh-tier-router/lib/types/index.d.ts
+index 8549549..0ac97ba 100644
+--- a/node_modules/dsh-tier-router/lib/types/index.d.ts
++++ b/node_modules/dsh-tier-router/lib/types/index.d.ts
+@@ -30,6 +30,12 @@ export interface VisionFallback {
+   model: string
+ }
+ 
++/** One entry of a tier fallback array (`easyFallbacks` / `hardFallbacks`). */
++export interface TierFallback {
++  provider: string
++  model: string
++}
++
+ /** The resolved `tier-router` settings section (schema defaults ← base ← user). */
+ export interface TierRouterSettings {
+   /** Master switch; when false the session default model handles the request. */
+@@ -41,12 +47,16 @@ export interface TierRouterSettings {
+   hardProvider: string
+   hardModel: string
+   hardEffort: string
++  /** Ordered fallbacks tried after the hard route, before degrading to normal. */
++  hardFallbacks: TierFallback[]
+   normalProvider: string
+   normalModel: string
+   normalEffort: string
+   easyProvider: string
+   easyModel: string
+   easyEffort: string
++  /** Ordered fallbacks tried after the easy route, before degrading to normal. */
++  easyFallbacks: TierFallback[]
+   visionProvider: string
+   visionModel: string
+   visionEffort: string
+@@ -109,6 +119,8 @@ export declare function tierFallbackOrder(level: string): TierName[]
+ 
+ /** Read one tier route triple out of a resolved settings object. */
+ export declare function tierRoute(settings: TierRouterSettings, tier: RouteName): RouteTriple
++/** Read one tier's ordered fallback list (empty for old single-route configs). */
++export declare function tierFallbacks(settings: TierRouterSettings, tier: TierName): TierFallback[]
+ /** Read the explicit default route (settings-level last resort). */
+ export declare function fallbackRoute(settings: TierRouterSettings): RouteTriple
+ /** Whether a route triple names an actual provider+model. */
