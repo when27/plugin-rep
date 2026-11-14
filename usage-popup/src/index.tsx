@@ -72,6 +72,22 @@ export function apply(ctx: Context) {
       UsagePopControl,
     ),
   )
+
+  // dsh-plugin-save-token's composer strip now lives inside this HUD (the
+  // "Token saver" face). Replace its dock cell with an empty component at the
+  // same id + order so the saver UI costs no extra composer space; the
+  // plugin's settings section and host behavior are untouched.
+  ctx.slots.inject('conversation.composer.dock', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.composer.dock',
+        id: 'save-token-strip',
+        order: 85,
+        priority: -1,
+      },
+      () => null,
+    ),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +226,42 @@ interface ModelRow {
   share: number
 }
 
+/**
+ * One actual route's LOCAL token counters, as reported by the tier router.
+ * These are token counts only — no provider balance/billing API is involved.
+ */
+interface RoutedUsageBuckets {
+  provider: string
+  model: string
+  calls: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+}
+
+interface RoutedUsageSnapshot {
+  totals: RoutedUsageBuckets
+  byModel: Record<string, RoutedUsageBuckets>
+  sessions: Record<
+    string,
+    { total: RoutedUsageBuckets; byModel: Record<string, RoutedUsageBuckets>; updatedAt: number }
+  >
+  workers: Record<string, RoutedUsageBuckets>
+  updatedAt: number
+}
+
+interface RoutedModelRow {
+  key: string
+  label: string
+  color: string
+  calls: number
+  tokens: number
+  costRmb: number
+  costKnown: boolean
+  share: number
+}
+
 /** 517 / 12.2K / 517K / 1.2M — matches the built-in stat pills. */
 function compactCount(value: number): string {
   const scaled = (candidate: number): string =>
@@ -296,6 +348,267 @@ const MODEL_COLORS: Record<ModelClass, string> = {
   flash: '#3fb950',
   pro: '#58a6ff',
   search: '#d29922',
+}
+
+// ---------------------------------------------------------------------------
+// Routed-model registry. The tier router records one row per actual
+// provider/model that answered (DeepSeek, Gemini, GLM, ...). Pricing cards
+// exist only for DeepSeek; every other route is shown as local token counts
+// and is deliberately NOT synced against any provider billing API.
+// ---------------------------------------------------------------------------
+const ROUTER_USAGE_ENDPOINT = '/tier-router/api/usage'
+const ROUTER_USAGE_REFRESH_MS = 5_000
+const SAVE_TOKEN_DASHBOARD_ENDPOINT = '/save-token/api/dashboard'
+const SAVE_TOKEN_TOGGLE_ENDPOINT = '/save-token/api/set-enabled'
+const SAVER_REFRESH_MS = 4_000
+
+interface RoutedModelMeta {
+  label: string
+  color: string
+  pricing?: ModelId
+}
+
+const ROUTED_MODEL_META: Record<string, RoutedModelMeta> = {
+  'deepseek-account/deepseek-flash': { label: 'deepseek-flash', color: MODEL_COLORS.flash, pricing: 'flash' },
+  'deepseek-account/deepseek-v4-pro': { label: 'deepseek-v4-pro', color: MODEL_COLORS.pro, pricing: 'pro' },
+  'deepseek-account/deepseek-pro': { label: 'deepseek-v4-pro', color: MODEL_COLORS.pro, pricing: 'pro' },
+  'google/gemini-3.5-flash': { label: 'gemini-3.5-flash', color: '#3fb950' },
+  'google/gemini-3.1-flash-lite': { label: 'gemini-3.1-flash-lite', color: '#2ea043' },
+  'google-vertex/gemini-3.5-flash': { label: 'vertex · gemini-3.5-flash', color: '#39c5cf' },
+  'zai/glm-5.3-flash': { label: 'glm-5.3-flash', color: '#d29922' },
+  'zai/glm-5.3': { label: 'glm-5.3', color: '#bb8009' },
+  'zai-2/glm-5.3-flash': { label: 'glm-5.3-flash (key 2)', color: '#e3b341' },
+  'zai-2/glm-5.3': { label: 'glm-5.3 (key 2)', color: '#c69026' },
+}
+
+const ROUTED_FALLBACK_COLORS = ['#58a6ff', '#bc8cff', '#ff7b72', '#56d4dd', '#f0883e', '#7ee787']
+
+function hashText(value: string): number {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0
+  }
+  return hash
+}
+
+function routedModelMeta(provider: string, model: string): RoutedModelMeta {
+  const key = `${provider}/${model}`
+  const registered = ROUTED_MODEL_META[key]
+  if (registered !== undefined) return registered
+  const providerLabel = provider === '' ? 'unknown' : provider
+  return {
+    label: model === '' ? providerLabel : `${providerLabel} · ${model}`,
+    color: ROUTED_FALLBACK_COLORS[hashText(key) % ROUTED_FALLBACK_COLORS.length],
+  }
+}
+
+function nonnegativeCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : 0
+}
+
+function normalizeRoutedBuckets(value: unknown): RoutedUsageBuckets | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Record<string, unknown>
+  const provider = typeof record.provider === 'string' ? record.provider : ''
+  const model = typeof record.model === 'string' ? record.model : ''
+  return {
+    provider,
+    model,
+    calls: nonnegativeCount(record.calls),
+    inputTokens: nonnegativeCount(record.inputTokens),
+    outputTokens: nonnegativeCount(record.outputTokens),
+    cacheReadTokens: nonnegativeCount(record.cacheReadTokens),
+    cacheWriteTokens: nonnegativeCount(record.cacheWriteTokens),
+  }
+}
+
+function normalizeRoutedBucketsMap(value: unknown): Record<string, RoutedUsageBuckets> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
+  const out: Record<string, RoutedUsageBuckets> = {}
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    const buckets = normalizeRoutedBuckets(entry)
+    if (buckets !== null) out[key] = buckets
+  }
+  return out
+}
+
+function normalizeRoutedUsage(value: unknown): RoutedUsageSnapshot | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Record<string, unknown>
+  const totals = normalizeRoutedBuckets(record.totals)
+  if (totals === null) return null
+  const sessions: RoutedUsageSnapshot['sessions'] = {}
+  if (typeof record.sessions === 'object' && record.sessions !== null && !Array.isArray(record.sessions)) {
+    for (const [sessionId, sessionValue] of Object.entries(
+      record.sessions as Record<string, unknown>,
+    )) {
+      if (typeof sessionValue !== 'object' || sessionValue === null) continue
+      const sessionRecord = sessionValue as Record<string, unknown>
+      const sessionTotals = normalizeRoutedBuckets(sessionRecord.total)
+      if (sessionTotals === null) continue
+      sessions[sessionId] = {
+        total: sessionTotals,
+        byModel: normalizeRoutedBucketsMap(sessionRecord.byModel),
+        updatedAt: nonnegativeCount(sessionRecord.updatedAt),
+      }
+    }
+  }
+  return {
+    totals,
+    byModel: normalizeRoutedBucketsMap(record.byModel),
+    sessions,
+    workers: normalizeRoutedBucketsMap(record.workers),
+    updatedAt: nonnegativeCount(record.updatedAt),
+  }
+}
+
+function routedUsageTotal(buckets: RoutedUsageBuckets): number {
+  return buckets.inputTokens + buckets.outputTokens + buckets.cacheReadTokens + buckets.cacheWriteTokens
+}
+
+function routedUsageAsTokenUsage(buckets: RoutedUsageBuckets): TokenUsage {
+  return {
+    uncachedInputTokens: buckets.inputTokens,
+    outputTokens: buckets.outputTokens,
+    cacheReadTokens: buckets.cacheReadTokens,
+    cacheWriteTokens: buckets.cacheWriteTokens,
+  }
+}
+
+function routedRowsOf(
+  map: Record<string, RoutedUsageBuckets>,
+  tier: Tier,
+): RoutedModelRow[] {
+  const rows = Object.entries(map)
+    .map(([key, buckets]) => {
+      const meta = routedModelMeta(buckets.provider, buckets.model)
+      const tokens = routedUsageTotal(buckets)
+      return {
+        key,
+        label: meta.label,
+        color: meta.color,
+        calls: buckets.calls,
+        tokens,
+        costKnown: meta.pricing !== undefined,
+        costRmb:
+          meta.pricing === undefined
+            ? 0
+            : usageCostRmb(routedUsageAsTokenUsage(buckets), meta.pricing, tier === 'peak'),
+        share: 0,
+      } satisfies RoutedModelRow
+    })
+    .filter((row) => row.tokens > 0)
+    .sort((left, right) => right.tokens - left.tokens)
+  const total = rows.reduce((sum, row) => sum + row.tokens, 0)
+  return rows.map((row) => ({ ...row, share: total > 0 ? row.tokens / total : 0 }))
+}
+
+// ---------------------------------------------------------------------------
+// dsh-plugin-save-token dashboard (merged into this HUD). The numbers are the
+// plugin's own local counters; the strip that used to sit in the composer dock
+// is replaced by an empty cell so the saver UI costs no extra GUI space.
+// ---------------------------------------------------------------------------
+interface SaveTokenRecent {
+  ts: number
+  kind: string
+  label: string
+  detail: string
+  saved: number
+}
+
+interface SaveTokenDashboard {
+  uptimeSec: number
+  flags: { compress: boolean; dedupe: boolean; expandTool: boolean }
+  reliefPct: number
+  cacheHitPct: number
+  totals: {
+    requests: number
+    auxRequests: number
+    inputTokens: number
+    cachedTokens: number
+    cacheReadTokens: number
+    outputTokens: number
+    avoidedTokens: number
+  }
+  compression: {
+    count: number
+    bytesBefore: number
+    bytesAfter: number
+    dedupeHits: number
+    dedupeSavedBytes: number
+    losslessEncodes: number
+    tabularWindows: number
+  }
+  recent: SaveTokenRecent[]
+}
+
+function normalizeSaverDashboard(value: unknown): SaveTokenDashboard | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Record<string, unknown>
+  const totals = typeof record.totals === 'object' && record.totals !== null
+    ? (record.totals as Record<string, unknown>)
+    : {}
+  const compression = typeof record.compression === 'object' && record.compression !== null
+    ? (record.compression as Record<string, unknown>)
+    : {}
+  const flags = typeof record.flags === 'object' && record.flags !== null
+    ? (record.flags as Record<string, unknown>)
+    : {}
+  const recent: SaveTokenRecent[] = Array.isArray(record.recent)
+    ? record.recent.slice(0, 6).flatMap((entry) => {
+        if (typeof entry !== 'object' || entry === null) return []
+        const row = entry as Record<string, unknown>
+        return [{
+          ts: nonnegativeCount(row.ts),
+          kind: typeof row.kind === 'string' ? row.kind : 'request',
+          label: typeof row.label === 'string' ? row.label : '',
+          detail: typeof row.detail === 'string' ? row.detail : '',
+          saved: nonnegativeCount(row.saved),
+        }]
+      })
+    : []
+  return {
+    uptimeSec: nonnegativeCount(record.uptimeSec),
+    flags: {
+      compress: flags.compress === true,
+      dedupe: flags.dedupe === true,
+      expandTool: flags.expandTool === true,
+    },
+    reliefPct: nonnegativeCount(record.reliefPct),
+    cacheHitPct: nonnegativeCount(record.cacheHitPct),
+    totals: {
+      requests: nonnegativeCount(totals.requests),
+      auxRequests: nonnegativeCount(totals.auxRequests),
+      inputTokens: nonnegativeCount(totals.inputTokens),
+      cachedTokens: nonnegativeCount(totals.cachedTokens),
+      cacheReadTokens: nonnegativeCount(totals.cacheReadTokens),
+      outputTokens: nonnegativeCount(totals.outputTokens),
+      avoidedTokens: nonnegativeCount(totals.avoidedTokens),
+    },
+    compression: {
+      count: nonnegativeCount(compression.count),
+      bytesBefore: nonnegativeCount(compression.bytesBefore),
+      bytesAfter: nonnegativeCount(compression.bytesAfter),
+      dedupeHits: nonnegativeCount(compression.dedupeHits),
+      dedupeSavedBytes: nonnegativeCount(compression.dedupeSavedBytes),
+      losslessEncodes: nonnegativeCount(compression.losslessEncodes),
+      tabularWindows: nonnegativeCount(compression.tabularWindows),
+    },
+    recent,
+  }
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0 B'
+  if (value < 1024) return `${Math.round(value)} B`
+  const units = ['KB', 'MB', 'GB']
+  let scaled = value / 1024
+  let unit = 0
+  while (scaled >= 1024 && unit < units.length - 1) {
+    scaled /= 1024
+    unit += 1
+  }
+  return `${scaled >= 10 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[unit]}`
 }
 
 function rateCard(model: ModelClass, peak: boolean): RateCard {
@@ -2134,6 +2447,283 @@ const stopInputStyle: CSSProperties = {
 // dock slot is session-scoped; `shell.overlay` is root-scoped and has no
 // `useProjection` prop.
 // ---------------------------------------------------------------------------
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ${minutes % 60}m`
+}
+
+const saverWrapStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  marginTop: 2,
+}
+
+const saverHeadlineStyle: CSSProperties = {
+  fontSize: 26,
+  fontWeight: 650,
+  lineHeight: 1.05,
+  fontVariantNumeric: 'tabular-nums',
+}
+
+const saverHeadlineUnitStyle: CSSProperties = {
+  fontSize: 11,
+  opacity: 0.7,
+  marginLeft: 6,
+}
+
+const saverGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: 6,
+}
+
+const saverMetricStyle: CSSProperties = {
+  minWidth: 0,
+  padding: '6px 8px',
+  borderRadius: 6,
+  background: 'var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.12))',
+}
+
+const saverMetricLabelStyle: CSSProperties = {
+  display: 'block',
+  fontSize: 10,
+  lineHeight: 1.25,
+  opacity: 0.66,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+const saverMetricValueStyle: CSSProperties = {
+  display: 'block',
+  marginTop: 2,
+  fontSize: 13,
+  fontWeight: 600,
+  fontVariantNumeric: 'tabular-nums',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+const saverToggleRowStyle: CSSProperties = {
+  display: 'flex',
+  gap: 6,
+  alignItems: 'center',
+}
+
+const saverToggleStyle = (on: boolean): CSSProperties => ({
+  border: '1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.3))',
+  borderRadius: 999,
+  padding: '2px 9px',
+  fontSize: 11,
+  cursor: 'pointer',
+  color: on
+    ? 'var(--dsw-alias-state-success-primary, #3fb950)'
+    : 'var(--dsw-alias-label-secondary, inherit)',
+  background: on
+    ? 'color-mix(in srgb, var(--dsw-alias-state-success-primary, #3fb950) 14%, transparent)'
+    : 'transparent',
+  opacity: 0.95,
+})
+
+const saverRecentRowStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '38px minmax(0, 1fr) auto',
+  gap: 6,
+  alignItems: 'baseline',
+  fontSize: 11,
+  lineHeight: 1.35,
+}
+
+/**
+ * The merged dsh-plugin-save-token dashboard. Everything is read from the
+ * saver's own local `/save-token/api/dashboard` counters; no model calls, no
+ * provider API.
+ */
+function SaverPanel() {
+  const [data, setData] = useState<SaveTokenDashboard | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    let timer = 0
+    const load = async (): Promise<void> => {
+      try {
+        const response = await fetch(SAVE_TOKEN_DASHBOARD_ENDPOINT, {
+          headers: { accept: 'application/json' },
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const payload: unknown = await response.json()
+        const normalized = normalizeSaverDashboard(payload)
+        if (cancelled) return
+        setData(normalized)
+        setError(normalized === null ? 'unexpected dashboard payload' : null)
+      } catch (cause) {
+        if (cancelled) return
+        setError(cause instanceof Error ? cause.message : 'unavailable')
+      }
+      if (!cancelled) timer = window.setTimeout(() => void load(), SAVER_REFRESH_MS)
+    }
+    void load()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [])
+
+  const toggle = async (key: 'compress' | 'dedupe'): Promise<void> => {
+    if (data === null || busy) return
+    const next = !data.flags[key]
+    setBusy(true)
+    try {
+      const response = await fetch(SAVE_TOKEN_TOGGLE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key, value: next }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      setData((previous) =>
+        previous === null ? previous : { ...previous, flags: { ...previous.flags, [key]: next } },
+      )
+      setError(null)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'toggle failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (data === null) {
+    return (
+      <div style={saverWrapStyle}>
+        <div style={sectionTitleRowStyle}>
+          <span style={sectionTitleStyle}>Token saver</span>
+          <span style={sectionValueStyle}>—</span>
+        </div>
+        <div style={tinyHintStyle}>
+          {error === null
+            ? 'Loading local save-token counters…'
+            : `Token saver unavailable (${error}). Install dsh-plugin-save-token to populate this tab.`}
+        </div>
+      </div>
+    )
+  }
+
+  const compressedBytes = Math.max(0, data.compression.bytesBefore - data.compression.bytesAfter)
+  const dedupeBytes = data.compression.dedupeSavedBytes
+  const recent = data.recent.slice(0, 4)
+
+  return (
+    <div style={saverWrapStyle}>
+      <div style={sectionTitleRowStyle}>
+        <span style={sectionTitleStyle}>Token saver</span>
+        <span style={syncStatusStyle} title={`Local counters · uptime ${formatUptime(data.uptimeSec)}`}>
+          <span
+            aria-hidden="true"
+            style={syncDotStyle(
+              data.flags.compress ? 'var(--dsw-alias-state-success-primary, #3fb950)' : 'var(--dsw-alias-label-secondary, #8b949e)',
+            )}
+          />
+          live
+        </span>
+      </div>
+
+      <div style={balanceHeadlineRowStyle}>
+        <span style={saverHeadlineStyle}>{compactCount(data.totals.avoidedTokens)}</span>
+        <span style={saverHeadlineUnitStyle}>tokens avoided</span>
+      </div>
+      <div style={tinyHintStyle}>
+        {data.reliefPct}% of billed input relief · no model calls, no provider sync
+      </div>
+
+      <div style={saverGridStyle}>
+        <div style={saverMetricStyle}>
+          <span style={saverMetricLabelStyle}>Requests</span>
+          <span style={saverMetricValueStyle}>{compactCount(data.totals.requests)}</span>
+        </div>
+        <div style={saverMetricStyle}>
+          <span style={saverMetricLabelStyle}>Compressed</span>
+          <span style={saverMetricValueStyle}>{compactCount(data.compression.count)}</span>
+        </div>
+        <div style={saverMetricStyle}>
+          <span style={saverMetricLabelStyle}>Cache hit</span>
+          <span style={saverMetricValueStyle}>{data.cacheHitPct}%</span>
+        </div>
+        <div style={saverMetricStyle}>
+          <span style={saverMetricLabelStyle}>Lossless</span>
+          <span style={saverMetricValueStyle}>{compactCount(data.compression.losslessEncodes)}</span>
+        </div>
+        <div style={saverMetricStyle}>
+          <span style={saverMetricLabelStyle}>Dedupe hits</span>
+          <span style={saverMetricValueStyle}>{compactCount(data.compression.dedupeHits)}</span>
+        </div>
+        <div style={saverMetricStyle}>
+          <span style={saverMetricLabelStyle}>Bytes cut</span>
+          <span style={saverMetricValueStyle}>{formatBytes(compressedBytes + dedupeBytes)}</span>
+        </div>
+      </div>
+
+      <div style={saverToggleRowStyle}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void toggle('compress')}
+          style={saverToggleStyle(data.flags.compress)}
+          title="Toggle dsh-plugin-save-token compression"
+        >
+          compress {data.flags.compress ? 'on' : 'off'}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void toggle('dedupe')}
+          style={saverToggleStyle(data.flags.dedupe)}
+          title="Toggle duplicate-output dedupe"
+        >
+          dedupe {data.flags.dedupe ? 'on' : 'off'}
+        </button>
+        <span style={{ ...tinyHintStyle, marginLeft: 'auto' }}>
+          {data.totals.auxRequests} aux
+        </span>
+      </div>
+
+      {recent.length > 0 && (
+        <div>
+          <div style={{ ...tinyHintStyle, marginBottom: 3 }}>Recent</div>
+          {recent.map((row, index) => (
+            <div key={`${row.ts}-${index}`} style={saverRecentRowStyle}>
+              <span style={{ opacity: 0.6 }}>
+                {row.ts > 0
+                  ? new Date(row.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : '—'}
+              </span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {row.label || row.kind}
+                {row.detail !== '' ? <span style={{ opacity: 0.6 }}> · {row.detail}</span> : null}
+              </span>
+              <span style={{ opacity: 0.72 }}>
+                {row.saved > 0 ? `-${compactCount(row.saved)}` : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error !== null && (
+        <div style={{ ...tinyHintStyle, ...dangerTextStyle }}>{error}</div>
+      )}
+      <div style={tinyHintStyle}>
+        Merged from dsh-plugin-save-token · dashboard moved here so the composer stays clean.
+      </div>
+    </div>
+  )
+}
+
 function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
   const { useProjection, sessionId } = props
 
@@ -2154,6 +2744,13 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
 
   const [visible, setVisible] = useState(() => readStoredFlag(VISIBLE_KEY, true))
   const [minimized, setMinimized] = useState(() => readStoredFlag(MINIMIZED_KEY, false))
+  // Which face the HUD shows: the usage ledger or the merged token-saver
+  // dashboard. Both share the same floating card, so the composer dock has
+  // exactly one control.
+  const [panel, setPanel] = useState<'usage' | 'saver'>('usage')
+  // Local per-model / per-session token counters fetched from the tier router.
+  // `null` means the router is absent or has not recorded a call yet.
+  const [routedUsage, setRoutedUsage] = useState<RoutedUsageSnapshot | null>(null)
   const [position, setPosition] = useState<HudPosition>(() => initialPosition(topInset))
   const [dragging, setDragging] = useState(false)
   const [timeframe, setTimeframe] = useState<Timeframe>(() =>
@@ -2339,6 +2936,30 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
       share: total > 0 ? costs[id] / total : 0,
     }))
   }, [modelTokens, selectedEntries, trueSelectedCost])
+
+  // Actual routes that answered this session (DeepSeek + any fetch-boy route).
+  // Only available when the patched tier router is loaded; otherwise the
+  // DeepSeek ledger breakdown above is the fallback.
+  const routedTier = peakTier(naturalPeak)
+  const routedRows = useMemo<RoutedModelRow[] | null>(() => {
+    if (routedUsage === null || sessionKey === null) return null
+    const session = routedUsage.sessions[sessionKey]
+    if (session === undefined) return null
+    const rows = routedRowsOf(session.byModel, routedTier)
+    return rows.length > 0 ? rows : null
+  }, [routedUsage, sessionKey, routedTier])
+  const routedSessionTokens = useMemo(
+    () => (routedRows === null ? 0 : routedRows.reduce((sum, row) => sum + row.tokens, 0)),
+    [routedRows],
+  )
+  const workerRows = useMemo<RoutedModelRow[]>(
+    () => (routedUsage === null ? [] : routedRowsOf(routedUsage.workers, routedTier)),
+    [routedUsage, routedTier],
+  )
+  const workerTokens = useMemo(
+    () => workerRows.reduce((sum, row) => sum + row.tokens, 0),
+    [workerRows],
+  )
 
   const flashUsed = modelTokens.flash > 0
   const proUsed = modelTokens.pro > 0
@@ -2579,6 +3200,39 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
   useEffect(() => {
     writeStored(TARGET_RUNWAY_KEY, String(targetRunwayDays))
   }, [targetRunwayDays])
+
+  // Poll the tier router's LOCAL per-model counters. The router only records
+  // what its adapters reported, so this works for Google/Z.ai routes too with
+  // no provider API. Failure is non-fatal: the DeepSeek ledger breakdown stays.
+  useEffect(() => {
+    if (!visible || minimized || panel !== 'usage') return
+    let cancelled = false
+    let timer = 0
+    const load = async (): Promise<void> => {
+      try {
+        const response = await fetch(ROUTER_USAGE_ENDPOINT, {
+          headers: { accept: 'application/json' },
+        })
+        if (response.ok) {
+          const payload: unknown = await response.json()
+          const record =
+            typeof payload === 'object' && payload !== null
+              ? (payload as Record<string, unknown>)
+              : {}
+          const normalized = normalizeRoutedUsage(record.usage)
+          if (!cancelled) setRoutedUsage(normalized)
+        }
+      } catch {
+        // Router absent or still booting; keep the last snapshot.
+      }
+      if (!cancelled) timer = window.setTimeout(() => void load(), ROUTER_USAGE_REFRESH_MS)
+    }
+    void load()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [visible, minimized, panel, sessionKey])
 
   // Fold any legacy per-session ledgers into the global database once on mount.
   useEffect(() => {
@@ -3231,6 +3885,34 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
           {!minimized && (
             <div style={bodyStyle}>
               <div
+                style={{ ...segmentGroupStyle, marginBottom: 8 }}
+                role="group"
+                aria-label="Usage panel"
+              >
+                <button
+                  type="button"
+                  aria-pressed={panel === 'usage'}
+                  onClick={() => setPanel('usage')}
+                  style={segmentButtonStyle(panel === 'usage')}
+                >
+                  Usage
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={panel === 'saver'}
+                  onClick={() => setPanel('saver')}
+                  style={segmentButtonStyle(panel === 'saver')}
+                  title="dsh-plugin-save-token dashboard, merged into this HUD"
+                >
+                  Token saver
+                </button>
+              </div>
+
+              {panel === 'saver' ? (
+                <SaverPanel />
+              ) : (
+                <>
+              <div
                 style={timeframeGroupStyle}
                 role="group"
                 aria-label="Usage timeframe"
@@ -3413,42 +4095,111 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
                 </div>
               )}
 
-              <div style={sectionStyle}>
-                <div style={sectionTitleRowStyle}>
-                  <span style={sectionTitleStyle}>Cost by model</span>
-                  <span style={sectionValueStyle}>{yuan(trueSelectedCost)}</span>
+              {timeframe === 'session' && routedRows !== null ? (
+                <div style={sectionStyle}>
+                  <div style={sectionTitleRowStyle}>
+                    <span style={sectionTitleStyle}>Models · this session</span>
+                    <span style={sectionValueStyle}>{compactCount(routedSessionTokens)} tok</span>
+                  </div>
+                  <div style={modelBarStyle} aria-hidden="true">
+                    {routedRows.map((row) => (
+                      <div
+                        key={row.key}
+                        style={modelSegmentStyle(row.color, row.share)}
+                        title={`${row.label}: ${exactCount(row.tokens)} tokens`}
+                      />
+                    ))}
+                  </div>
+                  {routedRows.map((row) => (
+                    <div
+                      key={row.key}
+                      style={modelRowStyle}
+                      title={`${row.label} · ${exactCount(row.tokens)} tokens · ${row.calls} call${
+                        row.calls === 1 ? '' : 's'
+                      }${
+                        row.costKnown
+                          ? ` · ${yuan(row.costRmb)}`
+                          : ' · local token count (no provider sync)'
+                      }`}
+                    >
+                      <span aria-hidden="true" style={modelDotStyle(row.color)} />
+                      <span style={modelNameStyle}>{row.label}</span>
+                      <span style={modelTokensStyle}>{compactCount(row.tokens)} tok</span>
+                      <span style={modelCostStyle}>{row.costKnown ? yuan(row.costRmb) : 'local'}</span>
+                      <span style={modelShareStyle}>{percent(row.share)}</span>
+                    </div>
+                  ))}
+                  <div style={tinyHintStyle}>
+                    Local route counts from the tier router. DeepSeek rows are priced; other
+                    models stay tokens-only and are never synced against a provider API.
+                  </div>
                 </div>
-                <div style={modelBarStyle} aria-hidden="true">
+              ) : (
+                <div style={sectionStyle}>
+                  <div style={sectionTitleRowStyle}>
+                    <span style={sectionTitleStyle}>Cost by model</span>
+                    <span style={sectionValueStyle}>{yuan(trueSelectedCost)}</span>
+                  </div>
+                  <div style={modelBarStyle} aria-hidden="true">
+                    {modelRows.map((row) => (
+                      <div
+                        key={row.id}
+                        style={modelSegmentStyle(row.color, row.share)}
+                        title={`${row.label}: ${yuan(row.costRmb)}`}
+                      />
+                    ))}
+                  </div>
                   {modelRows.map((row) => (
                     <div
                       key={row.id}
-                      style={modelSegmentStyle(row.color, row.share)}
-                      title={`${row.label}: ${yuan(row.costRmb)}`}
-                    />
+                      style={modelRowStyle}
+                      title={
+                        row.id === 'search'
+                          ? 'server-tool-search charges. Recorded only when the host ledger carries such entries; otherwise ¥0.00.'
+                          : `${row.label} · ${exactCount(row.tokens)} tokens · ${yuan(row.costRmb)}`
+                      }
+                    >
+                      <span aria-hidden="true" style={modelDotStyle(row.color)} />
+                      <span style={modelNameStyle}>{row.label}</span>
+                      <span style={modelTokensStyle}>
+                        {row.tokens === 0 ? '—' : `${compactCount(row.tokens)} tok`}
+                      </span>
+                      <span style={modelCostStyle}>{yuan(row.costRmb)}</span>
+                      <span style={modelShareStyle}>
+                        {row.costRmb <= 0 ? '0%' : percent(row.share)}
+                      </span>
+                    </div>
                   ))}
                 </div>
-                {modelRows.map((row) => (
-                  <div
-                    key={row.id}
-                    style={modelRowStyle}
-                    title={
-                      row.id === 'search'
-                        ? 'server-tool-search charges. Recorded only when the host ledger carries such entries; otherwise ¥0.00.'
-                        : `${row.label} · ${exactCount(row.tokens)} tokens · ${yuan(row.costRmb)}`
-                    }
-                  >
-                    <span aria-hidden="true" style={modelDotStyle(row.color)} />
-                    <span style={modelNameStyle}>{row.label}</span>
-                    <span style={modelTokensStyle}>
-                      {row.tokens === 0 ? '—' : `${compactCount(row.tokens)} tok`}
-                    </span>
-                    <span style={modelCostStyle}>{yuan(row.costRmb)}</span>
-                    <span style={modelShareStyle}>
-                      {row.costRmb <= 0 ? '0%' : percent(row.share)}
-                    </span>
+              )}
+
+              {timeframe === 'session' && workerRows.length > 0 && (
+                <div style={sectionStyle}>
+                  <div style={sectionTitleRowStyle}>
+                    <span style={sectionTitleStyle}>Fetch boys · this run</span>
+                    <span style={sectionValueStyle}>{compactCount(workerTokens)} tok</span>
                   </div>
-                ))}
-              </div>
+                  {workerRows.map((row) => (
+                    <div
+                      key={row.key}
+                      style={modelRowStyle}
+                      title={`${row.label} · ${exactCount(row.tokens)} tokens · ${row.calls} call${
+                        row.calls === 1 ? '' : 's'
+                      } · delegated session, local count only`}
+                    >
+                      <span aria-hidden="true" style={modelDotStyle(row.color)} />
+                      <span style={modelNameStyle}>{row.label}</span>
+                      <span style={modelTokensStyle}>{compactCount(row.tokens)} tok</span>
+                      <span style={modelCostStyle}>local</span>
+                      <span style={modelShareStyle}>{row.calls}×</span>
+                    </div>
+                  ))}
+                  <div style={tinyHintStyle}>
+                    Delegated subagent sessions since the router last started. Tokens only — no
+                    provider sync.
+                  </div>
+                </div>
+              )}
 
               <div style={sectionStyle}>
                 <div style={sectionTitleRowStyle}>
@@ -3690,6 +4441,8 @@ function UsagePopControl(props: PropsRuntime<'conversation.composer.dock'>) {
               {dataMessage !== null && <div style={tinyHintStyle}>{dataMessage}</div>}
               {usage === null && displayedTotal === 0 && (
                 <p style={hintStyle}>No session data yet.</p>
+              )}
+                </>
               )}
             </div>
           )}

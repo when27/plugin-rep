@@ -1,0 +1,9 @@
+7c4838ce72f49ff13a1380328e9f2ee44ec4d4e603d873e5ee03a3aa1284a47b  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\.dsh-work\apply\dsh-tier-router\lib\schema.js
+1a97219392d91ee34769afa5463d27fbe22d6eeeb4181ee1e245a763bacde8c4  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\.dsh-work\apply\dsh-tier-router\lib\router.js
+899d9af6ae2ee9b6a364dd0e642875902340a7977d48b5d58b3db4b6e8b67e09  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\.dsh-work\apply\dsh-tier-router\lib\models-api.js
+ed84732e6c168d1e140b3337b1f20e653f7b46778e38a1f483ffe71d60210c8b  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\.dsh-work\apply\dsh-tier-router\lib\types\index.d.ts
+d1b950dc333edaa268d3c4fdbef55c88340cc94b8c8882ad1bccbf4d655bcf4a  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\.dsh-work\apply\cordis.patch.yml
+3cc222a8616c178dba0ffb0376513203b808af5c2fadc298d392ecf57ebd8500  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\patches\dsh-tier-router-0.6.0-tier-fallbacks.patch
+3a97c446d5674bc3badcdbc83069b30e4c3a5d88a5925158340cf4b3e99dc360  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\.dsh-work\apply\apply.sh
+bbf9fb11a01bdfe9acca0683b210017a14bccd2a2726c72806849ff04af91cf6  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\.dsh-work\apply\patch-config.mjs
+44ecfd88fc99db58445e6922decc8a6a7e75641aee2f7e1d526fcf88a8496327  C:\Users\Administrator\Documents\deepseek-harness\default-workspace\.dsh-work\apply\verify-installed.mjs

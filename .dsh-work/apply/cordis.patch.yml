@@ -1,0 +1,167 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+- id: ui-settings-account
+  name: "@deepseek-ai/dsh-client-ui-settings-account"
+  config:
+    version: 1
+    step: done
+    purpose: both
+    process: detailed
+    completion: completed
+    usage: detailed
+    developerTools: true
+- id: ui-chat
+  name: "@deepseek-ai/dsh-client-ui-chat"
+  config:
+    transcriptView: detailed
+    performanceUsage: detailed
+- id: ui-settings
+  name: "@deepseek-ai/dsh-client-ui-settings"
+  config:
+    enabled: true
+- id: ui-theme
+  name: "@deepseek-ai/dsh-client-ui-theme"
+  config:
+    preference: dark
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: tier-router
+    model: smart
+    reasoningEffort: high
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      google:
+        models:
+          - id: gemini-3.5-flash
+            name: Gemini 3.5 Flash
+            contextWindow: 1000000
+            maxTokens: 65536
+            input:
+              - text
+              - image
+          - id: gemini-3.1-flash-lite
+            name: Gemini 3.1 Flash Lite
+            contextWindow: 1000000
+            maxTokens: 65536
+            input:
+              - text
+              - image
+        apiKeyEnv: GOOGLE_API_KEY
+      google-vertex:
+        apiKeyEnv: GOOGLE_VERTEX_API_KEY
+      zai:
+        apiKeyEnv: ZAI_API_KEY
+      zai-2:
+        displayName: Z.AI (second key)
+        apiKeyEnv: ZAI_API_KEY_2
+        api: openai-completions
+        baseURL: https://api.z.ai/api/coding/paas/v4
+        models:
+          - id: glm-5.3-flash
+            name: GLM-5.3-Flash
+            contextWindow: 1000000
+            maxTokens: 65536
+          - id: glm-5.3
+            name: GLM-5.3
+            contextWindow: 1000000
+            maxTokens: 65536
+
+# --- optimization stack -------------------------------------------------
+# dsh-code-index: keep the ranked repo map out of the system prompt. An
+# injected map changes the prompt prefix every turn and invalidates the
+# provider's cached-prefix discount; call the code_map tool instead.
+- id: code-index
+  name: dsh-code-index
+  config:
+    autoInject: false
+    toolSurface: full
+    externalWatch: true
+    codeHealth: false
+
+# dsh-plugin-save-token: "balanced" compression profile, restated
+# explicitly so a later bundle-layer change cannot silently drift it.
+# Small outputs (< minBytes) pass through untouched; large uniform JSON is
+# re-encoded losslessly as a TOON-style table; oversized logs get a
+# head/tail window with line-numbered stride samples; every compression
+# spills the full original to disk behind save_token_expand.
+- id: save-token
+  name: dsh-plugin-save-token
+  config:
+    compressEnabled: true
+    dedupeEnabled: true
+    minBytes: 1400
+    errorMinBytes: 6000
+    minSavingBytes: 500
+    keepRatioMax: 0.72
+    maxLines: 240
+    headLines: 140
+    tailLines: 80
+    tabularHeadRows: 60
+    tabularTailRows: 40
+    tabularStrideSamples: 50
+    longLineChars: 420
+    jsonMaxParseBytes: 524288
+    jsonlMinLines: 8
+    noticeFullTrailerCount: 3
+    dedupeTtlMs: 600000
+    dedupeTtlOverrides: {}
+    compactAssistEnabled: false
+    compactBudgetTokens: 120000
+    compactCooldownMs: 600000
+    contextWindowTokens: 0
+    compactWatermarkRatio: 0.85
+
+# dsh-tier-router: virtual provider "tier-router" / model "smart".
+# Hard and fallback tiers start on the DeepSeek account route. Easy turns
+# start on Gemini and then follow the explicit easy fallback chain:
+# google → google-vertex → zai → zai-2 → deepseek-account.
+# dsh-tier-router 0.6.0 is patched in place with per-tier fallback arrays
+# (easyFallbacks / hardFallbacks), matching the existing visionFallbacks.
+# `hard` keeps its existing route; only easyFallbacks is configured here.
+- id: tier-router
+  name: dsh-tier-router
+  config:
+    enabled: true
+    classifier: heuristic
+
+    hardProvider: deepseek-account
+    hardModel: deepseek-flash
+    hardEffort: max
+
+    normalProvider: deepseek-account
+    normalModel: deepseek-flash
+    normalEffort: max
+
+    easyProvider: google
+    easyModel: gemini-3.5-flash
+    easyEffort: ''
+    easyFallbacks:
+      - provider: google-vertex
+        model: gemini-3.5-flash
+      - provider: zai
+        model: glm-5.3-flash
+      - provider: zai-2
+        model: glm-5.3-flash
+
+    visionProvider: google
+    visionModel: gemini-3.5-flash
+    visionMode: replace
+    visionFallbacks:
+      - provider: google-vertex
+        model: gemini-3.5-flash
+      - provider: zai
+        model: glm-5.3-flash
+      - provider: zai-2
+        model: glm-5.3-flash
+      - provider: deepseek-account
+        model: deepseek-flash
+
+    fallbackProvider: deepseek-account
+    fallbackModel: deepseek-flash
+    contextGuard: true
+    routeCooldownMs: 300000
+    routeFailureThreshold: 2

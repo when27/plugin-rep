@@ -1,6 +1,6 @@
 {
   "name": "usage-popup",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Composer token-usage popup for DeepSeek Harness",
   "private": true,
   "type": "module",

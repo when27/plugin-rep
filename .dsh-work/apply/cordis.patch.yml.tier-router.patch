@@ -1,0 +1,36 @@
+diff --git a/cordis.patch.yml b/cordis.patch.yml
+index 2eef0cc..a6ba818 100644
+--- a/cordis.patch.yml
++++ b/cordis.patch.yml
+@@ -117,13 +117,11 @@
+ 
+ # dsh-tier-router: virtual provider "tier-router" / model "smart".
+ # Hard and fallback tiers start on the DeepSeek account route. Easy turns
+-# start on Gemini, and image work gets an explicit free-tier chain:
++# start on Gemini and then follow the explicit easy fallback chain:
+ # google → google-vertex → zai → zai-2 → deepseek-account.
+-# NOTE: dsh-tier-router 0.6.0 accepts one provider per difficulty tier and
+-# has no per-tier fallback arrays, so the requested easy chain cannot be
+-# represented; easy rate limits advance to normal (DeepSeek), and a failed
+-# hard route can still degrade through the easy tier. Only visionFallbacks
+-# is a real provider chain.
++# dsh-tier-router 0.6.0 is patched in place with per-tier fallback arrays
++# (easyFallbacks / hardFallbacks), matching the existing visionFallbacks.
++# `hard` keeps its existing route; only easyFallbacks is configured here.
+ - id: tier-router
+   name: dsh-tier-router
+   config:
+@@ -141,6 +139,13 @@
+     easyProvider: google
+     easyModel: gemini-3.5-flash
+     easyEffort: ''
++    easyFallbacks:
++      - provider: google-vertex
++        model: gemini-3.5-flash
++      - provider: zai
++        model: glm-5.3-flash
++      - provider: zai-2
++        model: glm-5.3-flash
+ 
+     visionProvider: google
+     visionModel: gemini-3.5-flash

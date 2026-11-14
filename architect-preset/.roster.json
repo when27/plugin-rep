@@ -1,0 +1,23 @@
+[
+  {
+    "id": "standard",
+    "broken": null
+  },
+  {
+    "id": "ptc",
+    "broken": null
+  },
+  {
+    "id": "minimal",
+    "broken": null
+  },
+  {
+    "id": "cordis",
+    "broken": null
+  },
+  {
+    "id": "architect",
+    "name": "Architect",
+    "broken": null
+  }
+]

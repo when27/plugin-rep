@@ -1,0 +1,55 @@
+ok 1 - plugin exports the expected identity and injects tools
+ok 2 - registers exactly one enforcement guard on the ROOT tools service
+ok 3 - registers agent/created and agent/disposed listeners on the root context
+ok 4 - main restriction is applied through agent.ctx.tools (scoped context)
+ok 5 - main deny list only contains names DSH accepts as restrictable
+ok 6 - main gets the static ARCHITECT_CONTRACT section, mutually exclusive
+ok 7 - main registers an agent-scoped tools/post-execute listener
+ok 8 - untagged subagent and subagent_fork delegations succeed unmodified
+ok 9 - no BUDGET gate or per-role budget machinery remains
+ok 10 - main file/shell tools are blocked by the guard even if schema restriction failed
+ok 11 - the architect/main role is never capped
+ok 12 - a lineage worker keeps file/shell tools
+ok 13 - a lineage worker cannot re-delegate
+ok 14 - a lineage worker cannot call repo-index or role tools
+ok 15 - worker has no tool-call count cap (150+ sequential calls all succeed)
+ok 16 - worker gets only the static WORKER_CONTRACT section, at a stable position
+ok 17 - the same role prompt is byte-identical under differing session/call state
+ok 18 - lineage alone marks a child as a worker when the header has no preset
+ok 19 - a non-architect session is not restricted
+ok 20 - a session created under ops-ptc is left untouched (role other)
+ok 21 - switching ops-ptc -> architect re-applies restrict() and ARCHITECT_CONTRACT
+ok 22 - the switch installs an agent-scoped enforcement guard (realm-safe)
+ok 23 - after the switch the parent can no longer run file/shell/repo tools
+ok 24 - after the switch an untagged delegation still succeeds (no BUDGET gate)
+ok 25 - the other cache is gone: the projection now reads architect
+ok 26 - after the switch a lineage worker gets WORKER_CONTRACT, never ARCHITECT_CONTRACT
+ok 27 - a missed switch event is still caught lazily at the next tool call
+ok 28 - the agentPreset session projection wins over the header
+ok 29 - an oversized text result is head+tail truncated by the post-execute hook
+ok 30 - a result under 64 KB and a block decision pass through untouched
+ok 31 - 64 KB passes intact; one byte over is truncated to 24 KB head + 24 KB tail
+ok 32 - non-text content is left intact rather than corrupted
+ok 33 - a throwing restrict() is contained and logged, never fatal
+ok 34 - agent/disposed tears down without throwing
+ok 35 - delegation queue is capped at 16 pending workers
+ok 36 - architect main resolves to high, downgrading max
+ok 37 - architect main is raised to high even when the profile default is low
+ok 38 - architect main already at high records no duplicate selection
+ok 39 - depth>0 worker is forced to low (native DeepSeek level)
+ok 40 - a parentSession worker at depth 0 is also forced to low
+ok 41 - worker already at low records no duplicate selection
+ok 42 - a non-architect session is left completely untouched
+ok 43 - a child of a non-architect session is left untouched
+ok 44 - a route without the target level is not forced into UNSUPPORTED_REASONING_EFFORT
+ok 45 - a route with no reasoning capability is left untouched
+ok 46 - the preset switch applies the new role effort before the next turn
+ok 47 - role effort never changes the role prompt: prefixes stay byte-identical
+ok 48 - no tool-call ceiling machinery remains in the plugin surface
+ok 49 - head+tail truncation keeps the marker and both ends
+ok 50 - lineage detection uses depth and parentSession only
+ok 51 - session ids normalize the session- prefix
+ok 52 - restrictable names never include scope-local-only tools
+
+# pass 52
+# fail 0
