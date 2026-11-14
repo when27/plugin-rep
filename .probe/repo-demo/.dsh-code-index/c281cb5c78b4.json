@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 4,
+  "root": "C:\\Users\\Administrator\\Documents\\deepseek-harness\\default-workspace\\.probe\\repo-demo",
+  "generatedAt": 1794423640036,
+  "files": [],
+  "excludedDirs": [
+    "node_modules",
+    ".git",
+    ".idea",
+    ".vscode",
+    "dist",
+    "build",
+    "out",
+    "coverage",
+    ".next",
+    ".nuxt",
+    ".cache",
+    "target",
+    "vendor",
+    ".dsh-code-index"
+  ]
+}
