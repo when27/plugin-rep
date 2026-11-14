@@ -12,6 +12,18 @@
       "preset": "architect",
       "subagent": false,
       "at": "2026-11-14T21:44:33.320Z"
+    },
+    {
+      "id": "session-01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "preset": "architect",
+      "subagent": false,
+      "at": "2026-11-14T22:01:08.720Z"
+    },
+    {
+      "id": "session-6a21a804-6eef-4401-b3a6-ab36c7497e1a",
+      "preset": "architect",
+      "subagent": false,
+      "at": "2026-11-14T22:01:13.694Z"
     }
   ],
   "guard": [
@@ -22,6 +34,16 @@
     },
     {
       "id": "dd8fc8af-6178-4a26-b072-4538f661d6f4",
+      "role": "main",
+      "preset": "architect"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "preset": "architect"
+    },
+    {
+      "id": "6a21a804-6eef-4401-b3a6-ab36c7497e1a",
       "role": "main",
       "preset": "architect"
     }
@@ -36,6 +58,24 @@
       "restrictions": 1,
       "sections": 1,
       "at": "2026-11-14T21:44:33.323Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "preset": "architect",
+      "guards": 1,
+      "restrictions": 1,
+      "sections": 1,
+      "at": "2026-11-14T22:01:08.725Z"
+    },
+    {
+      "id": "6a21a804-6eef-4401-b3a6-ab36c7497e1a",
+      "role": "main",
+      "preset": "architect",
+      "guards": 1,
+      "restrictions": 1,
+      "sections": 1,
+      "at": "2026-11-14T22:01:13.696Z"
     }
   ],
   "efforts": [
@@ -52,6 +92,55 @@
       "from": "high",
       "to": "high",
       "at": "2026-11-14T21:44:33.334Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T22:01:08.732Z"
+    },
+    {
+      "id": "dd8fc8af-6178-4a26-b072-4538f661d6f4",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T22:01:08.740Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T22:01:08.740Z"
+    },
+    {
+      "id": "dd8fc8af-6178-4a26-b072-4538f661d6f4",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T22:01:13.704Z"
+    },
+    {
+      "id": "01475993-c7fd-49a4-be2c-64f866e6cab2",
+      "role": "main",
+      "from": "high",
+      "to": "high",
+      "at": "2026-11-14T22:01:13.711Z"
+    },
+    {
+      "id": "6a21a804-6eef-4401-b3a6-ab36c7497e1a",
+      "role": "main",
+      "from": "low",
+      "to": "high",
+      "at": "2026-11-14T22:01:13.720Z"
+    },
+    {
+      "id": "6a21a804-6eef-4401-b3a6-ab36c7497e1a",
+      "role": "main",
+      "from": "low",
+      "to": "high",
+      "at": "2026-11-14T22:01:13.726Z"
     }
   ],
   "disposals": 0
