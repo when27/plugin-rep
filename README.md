@@ -17,7 +17,7 @@ this setup on another machine.
 | --- | --- |
 | `profiles/` | DSH profile configuration: the desktop profile (plugin composition patch, manifest, lockfile, compatibility pin) and the global agent rules copy. |
 | `presets/architect-preset/` | Source of the **Architect** agent preset: the restriction plugin, its preset definition, package manifest, and a dependency-free smoke test. |
-| `plugins/usage-popup/` | Local client plugin that shows a token-usage HUD in the composer. |
+| `plugins/usage-popup/` | Local client plugin: a global sidebar-launched token/cost ledger panel with per-chat history selection. |
 | `plugins/obsidian-task-sync/` | Local plugin that bridges an Obsidian vault (tasks, headings, tree points) into the web UI. |
 | `patches/` | The two local patches applied to `dsh-tier-router` 0.6.0 (tier fallbacks and worker-usage fields). |
 | `packages/` | `dsh-tier-router-0.6.0.tgz`, the patched build produced from those patches; the profile installs it via `file:`. |

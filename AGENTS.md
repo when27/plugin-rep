@@ -38,12 +38,13 @@ locally patched `dsh-tier-router` build, the patch files that produced it, and t
 | `presets/architect-preset/cordis.patch.yml` | Defines the preset itself: `preset-architect` row (`@deepseek-ai/dsh-agent-preset`, config `id: architect`, `order: 20`) and its plugin rows. |
 | `presets/architect-preset/package.json` | Package `@local/dsh-architect-preset` (private, ESM) with `dsh.bundle.patch: ./cordis.patch.yml`. |
 | `presets/architect-preset/smoke.test.mjs` | 52-check smoke suite for the restriction and reasoning-effort hooks; Node built-ins only, no dependencies. |
-| `plugins/usage-popup/src/index.tsx` | Client half of the token-usage popup: composer HUD with per-session token usage, model/balance ledger, draggable HUD position. |
+| `plugins/usage-popup/src/index.tsx` | Client half of the True-sync ledger: global-sidebar launcher plus a root-level (`shell.overlay`) token/cost panel, with auto-follow or manual historical chat selection in the Session tab. |
 | `plugins/usage-popup/scripts/build.mjs` | Tranpiles `src/index.tsx` with the TypeScript compiler API into `dist/index.js` + `dist/client.js` (`npm run build`). |
 | `plugins/usage-popup/cordis.patch.yml` | Bundle patch: inserts row `usage-popup` (name `usage-popup`). |
 | `plugins/usage-popup/cordis.yml` | Optional local-dev patch: mounts the plugin from an absolute source path in a repository checkout (`pnpm dsh web --patch ./plugins/usage-popup/cordis.yml`). |
-| `plugins/usage-popup/package.json` | Package manifest (`usage-popup@0.1.2`), `dsh.bundle` + `dsh.client` declarations, `engines.dsh ^0.2.2-rc.1`. |
-| `plugins/usage-popup/PLUGIN_NOTES.md` | Author notes on the composer HUD, build and manual verification. |
+| `plugins/usage-popup/package.json` | Package manifest (`usage-popup@0.3.0`), `dsh.bundle` + `dsh.client` declarations, `engines.dsh ^0.2.2-rc.1`. |
+| `plugins/usage-popup/PLUGIN_NOTES.md` | Author notes on the ledger, entry points, build and manual verification (the composer-dock sections are historical). |
+| `plugins/usage-popup/ARCHITECTURE.md` | **Deep-dive map for future refactors:** line ranges, Cordis/DSH injection and slot contracts, controller/lifecycle, active-chat reactivity and attribution, ledger schema, test suite, and the exact repack/profile-install release checklist. |
 | `plugins/obsidian-task-sync/src/host.js` | Host half: same-origin filesystem bridge + live SSE watcher over an Obsidian vault (read/append tasks, headings, tree points). |
 | `plugins/obsidian-task-sync/src/client.tsx` | Web client: sidebar launcher, detached daily-checklist widget and the skill-tree canvas. |
 | `plugins/obsidian-task-sync/scripts/build.mjs` | Build script: `dist/index.js` from `host.js`, `dist/client.js` from `client.tsx`. |
@@ -267,7 +268,7 @@ deterministic. Do not also install a plugin that force-overrides the model on
    "@local/dsh-architect-preset": "link:<repo>/presets/architect-preset",
    "dsh-tier-router": "file:<repo>/packages/dsh-tier-router-0.6.0.tgz",
    "obsidian-task-sync": "file:<build>/obsidian-task-sync-0.1.0.tgz",
-   "usage-popup": "file:<build>/usage-popup-0.1.2.tgz"
+   "usage-popup": "file:<build>/usage-popup-0.3.0.tgz"
    ```
 
    The two plugin tarballs are **not** in this export (build artifacts are excluded).

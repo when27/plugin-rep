@@ -25,6 +25,6 @@
     "dsh-plugin-save-token": "^2.4.1",
     "dsh-tier-router": "file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/router-tarball/dsh-tier-router-0.6.0.tgz",
     "obsidian-task-sync": "file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz",
-    "usage-popup": "file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/usage-popup/usage-popup-0.1.2.tgz"
+    "usage-popup": "file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/plugins/usage-popup/usage-popup-0.3.0.tgz"
   }
 }

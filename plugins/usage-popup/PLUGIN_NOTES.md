@@ -1,8 +1,27 @@
-# usage-popup — finish this (handoff notes)
+# usage-popup — True-sync ledger notes
 
-Skeleton state: registers a new control into the composer statistics dock and
-reads the live `tokenUsage` projection. The popup UI is **not** implemented —
-that is the remaining work. These notes are the spec for the finishing pass.
+> **Current architecture (2026-11-18).** The sole entry point is the global
+> sidebar (`sidebar.footer.action`, order 2, beside the Obsidian checklist
+> launcher above the signed-in account bar); the panel itself is mounted at the
+> root in `shell.overlay`. The plugin no longer contributes a control to
+> `conversation.composer.dock`, so the chat footer keeps only the DSH-native
+> token tracker. The Session tab has a chat selector built from the ledger:
+> it follows the app's active chat automatically (the Session retained with
+> source `mainView`, and only while no global panel is open), falls back to
+> the most recently active ledger chat on non-chat screens, and lets the user
+> lock onto a historical chat with a one-click "Current chat" snap-back pill.
+> The composer-dock notes below describe the 0.1–0.2 history and are kept for
+> context; do not re-introduce a chat-footer trigger.
+>
+> The open state lives in `createLedgerController` (`usage-popup.ledger.open.v1`,
+> closed by default) because the sidebar button and the overlay are separate
+> slot occupants. Live metrics for the root-scoped panel come from
+> `ctx.sessions.retain(activeChatId, { source: 'usagePopup' })` and the
+> generation's `projections.faceOf('tokenUsage' | 'modelSelection')`; historical
+> chats are pure ledger slices.
+>
+> For the full line map, Cordis/slot contracts, lifecycle, schema and release
+> checklist, read [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## What is already confirmed (do not re-derive)
 

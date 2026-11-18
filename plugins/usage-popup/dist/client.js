@@ -21,6 +21,7 @@ window.__ModuleLoader__.load({
     exports.planReconciliation = planReconciliation;
     exports.parseDashboardDate = parseDashboardDate;
     exports.parseDashboardExport = parseDashboardExport;
+    exports.buildChatOptions = buildChatOptions;
     const jsx_runtime_1 = require("react/jsx-runtime");
     const react_1 = require("react");
     const react_dom_1 = require("react-dom");
@@ -29,7 +30,7 @@ window.__ModuleLoader__.load({
     // provided by the renderer plugin (a sibling fiber), so reading `ctx.slots`
     // without declaring it throws `cannot get property "slots" without inject`
     // and the web-boot audit reports `usage-popup: failed`.
-    exports.inject = ['slots'];
+    exports.inject = ['slots', 'sessions'];
     /**
      * DeepSeek's `outputTokens` normally already includes reasoning tokens. If a
      * source reports only reasoning, bill that; if it reports both, never add them
@@ -64,23 +65,150 @@ window.__ModuleLoader__.load({
     let pluginContext = null;
     function apply(ctx) {
         pluginContext = ctx;
-        // Register our control into the composer statistics dock. `order: 2` puts it
-        // after the built-in `usage` (order 1) control.
-        ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
-            name: 'conversation.composer.dock',
-            id: 'usage-popup', // new id => a new control is appended
+        const controller = createLedgerController(ctx);
+        // Frame-wide floating panel. `shell.overlay` is root-scoped and sits above
+        // every column, so the panel is reachable from any screen — not only from an
+        // open conversation.
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'usage-popup-ledger', order: 110 }, (props) => (0, react_1.createElement)(LedgerOverlay, { ...props, controller })));
+        // The single visible entry point: one cell in the sidebar's bottom utility
+        // section, above the signed-in account bar (same pattern and order domain as
+        // the Obsidian checklist launcher).
+        ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+            name: 'sidebar.footer.action',
+            id: 'usage-popup',
             order: 2,
-        }, UsagePopControl));
-        // dsh-plugin-save-token's composer strip now lives inside this HUD (the
+            label: () => SIDEBAR_LABEL,
+        }, (props) => (0, react_1.createElement)(SidebarLauncher, { wide: props.wide === true, controller })));
+        // dsh-plugin-save-token's composer strip now lives inside this panel (the
         // "Token saver" face). Replace its dock cell with an empty component at the
         // same id + order so the saver UI costs no extra composer space; the
-        // plugin's settings section and host behavior are untouched.
+        // plugin's settings section and host behavior are untouched. This occupant
+        // renders nothing and is not this plugin's entry point.
         ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
             name: 'conversation.composer.dock',
             id: 'save-token-strip',
             order: 85,
             priority: -1,
         }, () => null));
+    }
+    // ---------------------------------------------------------------------------
+    // Launcher controller. The sidebar button and the root overlay are separate
+    // slot occupants, so open state lives in one small controller shared through
+    // `apply` instead of React context (the two mounts have no common ancestor).
+    // ---------------------------------------------------------------------------
+    const SIDEBAR_LABEL = 'True-sync ledger';
+    /** New key so a previously "always visible" dock HUD does not start open. */
+    const OPEN_KEY = 'usage-popup.ledger.open.v1';
+    function createLedgerController(ctx) {
+        let open = readStoredFlag(OPEN_KEY, false);
+        const listeners = new Set();
+        const emit = () => {
+            for (const listener of Array.from(listeners)) {
+                try {
+                    listener();
+                }
+                catch {
+                    /* a broken listener must not break the launcher */
+                }
+            }
+        };
+        return {
+            ctx,
+            getOpen: () => open,
+            setOpen: (next) => {
+                if (open === next)
+                    return;
+                open = next;
+                writeStored(OPEN_KEY, next ? '1' : '0');
+                emit();
+            },
+            toggle: () => {
+                open = !open;
+                writeStored(OPEN_KEY, open ? '1' : '0');
+                emit();
+            },
+            subscribe: (listener) => {
+                listeners.add(listener);
+                return () => {
+                    listeners.delete(listener);
+                };
+            },
+        };
+    }
+    /** Subscribe a component to the shared open state. */
+    function useLedgerOpen(controller) {
+        const [open, setOpenState] = (0, react_1.useState)(() => controller.getOpen());
+        (0, react_1.useEffect)(() => {
+            const sync = () => setOpenState(controller.getOpen());
+            sync();
+            return controller.subscribe(sync);
+        }, [controller]);
+        return open;
+    }
+    function LedgerGlyph({ size = 15 }) {
+        return ((0, jsx_runtime_1.jsxs)("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", style: { flex: '0 0 auto', display: 'block' }, children: [(0, jsx_runtime_1.jsx)("path", { d: "M5 3.5h11.5L20 7v13.5H5z" }), (0, jsx_runtime_1.jsx)("path", { d: "M8.5 9.5h8" }), (0, jsx_runtime_1.jsx)("path", { d: "M8.5 13h8" }), (0, jsx_runtime_1.jsx)("path", { d: "M8.5 16.5h5" })] }));
+    }
+    /**
+     * One sidebar cell. Styling and geometry deliberately follow the Obsidian
+     * checklist launcher: a 32px row that collapses to a 32px square in the rail,
+     * themed with host alias tokens and an accent tint while its panel is open.
+     */
+    function SidebarLedgerButton({ wide, open, onToggle, }) {
+        const iconSize = wide ? 15 : 17;
+        const idleBackground = 'transparent';
+        const idleColor = 'var(--dsw-alias-label-secondary, inherit)';
+        const activeBackground = 'rgba(126, 224, 189, 0.14)';
+        const activeColor = '#7ee0bd';
+        const style = {
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: wide ? 'flex-start' : 'center',
+            gap: 8,
+            width: wide ? '100%' : 32,
+            height: 32,
+            flex: '0 1 auto',
+            minWidth: 0,
+            padding: wide ? '0 9px' : 0,
+            border: 0,
+            borderRadius: 8,
+            background: open ? activeBackground : idleBackground,
+            color: open ? activeColor : idleColor,
+            font: 'inherit',
+            fontSize: 12,
+            lineHeight: '18px',
+            cursor: 'pointer',
+            textAlign: 'left',
+        };
+        const labelStyle = {
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            color: 'inherit',
+        };
+        return ((0, jsx_runtime_1.jsxs)("button", { type: "button", style: style, title: open ? `Hide ${SIDEBAR_LABEL}` : `Open ${SIDEBAR_LABEL}`, "aria-label": open ? `Hide ${SIDEBAR_LABEL}` : `Open ${SIDEBAR_LABEL}`, "aria-pressed": open, onClick: onToggle, onMouseEnter: (event) => {
+                event.currentTarget.style.background = open
+                    ? activeBackground
+                    : 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,.14))';
+                event.currentTarget.style.color = open
+                    ? activeColor
+                    : 'var(--dsw-alias-label-primary, inherit)';
+            }, onMouseLeave: (event) => {
+                event.currentTarget.style.background = open ? activeBackground : idleBackground;
+                event.currentTarget.style.color = open ? activeColor : idleColor;
+            }, children: [(0, jsx_runtime_1.jsx)(LedgerGlyph, { size: iconSize }), wide ? (0, jsx_runtime_1.jsx)("span", { style: labelStyle, children: SIDEBAR_LABEL }) : null] }));
+    }
+    function SidebarLauncher({ wide, controller, }) {
+        const open = useLedgerOpen(controller);
+        return (0, react_1.createElement)(SidebarLedgerButton, {
+            wide,
+            open,
+            onToggle: () => controller.toggle(),
+        });
+    }
+    function LedgerOverlay(props) {
+        const open = useLedgerOpen(props.controller);
+        return (0, react_1.createElement)(LedgerHud, { ...props, open });
     }
     // ---------------------------------------------------------------------------
     // HUD geometry, persistence keys, and display helpers.
@@ -116,7 +244,6 @@ window.__ModuleLoader__.load({
         return VIEWPORT_MARGIN + windowsTitlebarHeight();
     }
     const POSITION_KEY = 'usage-popup.hud.position.v1';
-    const VISIBLE_KEY = 'usage-popup.hud.visible.v1';
     const MINIMIZED_KEY = 'usage-popup.hud.minimized.v1';
     const TIMEFRAME_KEY = 'usage-popup.hud.timeframe.v1';
     const CUSTOM_START_KEY = 'usage-popup.hud.custom-start.v1';
@@ -1843,6 +1970,19 @@ window.__ModuleLoader__.load({
             if (value !== null && value.length > 0)
                 return value;
         }
+        // The DSH workspace tree marks the open chat with `aria-selected` on a row
+        // keyed `session:<id>`. This is a fallback for hosts whose retention source
+        // is unavailable; the retention signal above is preferred.
+        for (const row of Array.from(document.querySelectorAll('[data-row-key^="session:"]'))) {
+            if (row.closest('[data-usage-popup-hud]') !== null)
+                continue;
+            if (row.getAttribute('aria-selected') !== 'true')
+                continue;
+            const key = row.getAttribute('data-row-key');
+            const id = key === null ? '' : key.slice('session:'.length);
+            if (id.length > 0)
+                return id;
+        }
         for (const row of Array.from(document.querySelectorAll('[data-session-id]'))) {
             if (row.closest('[data-usage-popup-hud]') !== null)
                 continue;
@@ -2013,38 +2153,6 @@ window.__ModuleLoader__.load({
     // Styles. Only theme tokens (with literal fallbacks) are used, so light/dark
     // switching follows the host automatically.
     // ---------------------------------------------------------------------------
-    const dockButtonStyle = (visible) => ({
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        background: 'transparent',
-        color: 'inherit',
-        border: 0,
-        borderRadius: 6,
-        padding: '6px 8px',
-        font: 'inherit',
-        fontSize: 12,
-        lineHeight: '18px',
-        fontVariantNumeric: 'tabular-nums',
-        whiteSpace: 'nowrap',
-        cursor: 'pointer',
-        opacity: visible ? 1 : 0.72,
-    });
-    const dockDotStyle = (visible) => ({
-        width: 6,
-        height: 6,
-        flex: '0 0 auto',
-        borderRadius: 999,
-        background: visible
-            ? 'var(--dsw-alias-state-success-primary, #3fb950)'
-            : 'var(--dsw-alias-state-idle-primary, GrayText)',
-    });
-    const dockStateStyle = {
-        fontSize: 11,
-        lineHeight: '18px',
-        color: 'var(--dsw-alias-label-secondary, CanvasText)',
-        opacity: 0.72,
-    };
     const hudStyle = (position, minimized, dragging, topInset) => ({
         position: 'fixed',
         left: position.x,
@@ -2710,10 +2818,7 @@ window.__ModuleLoader__.load({
         fontVariantNumeric: 'tabular-nums',
     };
     // ---------------------------------------------------------------------------
-    // The dock control. It renders the show/hide toggle and, when visible, the
-    // portal'd HUD. The HUD's `useProjection` subscription lives here because the
-    // dock slot is session-scoped; `shell.overlay` is root-scoped and has no
-    // `useProjection` prop.
+    // Token-saver face (previously the separate composer strip).
     // ---------------------------------------------------------------------------
     function formatUptime(seconds) {
         if (seconds < 60)
@@ -2873,26 +2978,350 @@ window.__ModuleLoader__.load({
                                         ? new Date(row.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                         : '—' }), (0, jsx_runtime_1.jsxs)("span", { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: [row.label || row.kind, row.detail !== '' ? (0, jsx_runtime_1.jsxs)("span", { style: { opacity: 0.6 }, children: [" \u00B7 ", row.detail] }) : null] }), (0, jsx_runtime_1.jsx)("span", { style: { opacity: 0.72 }, children: row.saved > 0 ? `-${compactCount(row.saved)}` : '—' })] }, `${row.ts}-${index}`)))] })), error !== null && ((0, jsx_runtime_1.jsx)("div", { style: { ...tinyHintStyle, ...dangerTextStyle }, children: error })), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Merged from dsh-plugin-save-token \u00B7 dashboard moved here so the composer stays clean." })] }));
     }
-    function UsagePopControl(props) {
-        const { useProjection, sessionId } = props;
-        // Read the smallest slice we need. `tokenUsage` is `undefined` until the
-        // session has a projected value (no session bound yet, or not yet loaded).
-        // Normalize on every render instead of memoizing: it guarantees a fresh
-        // reading even if a host mutates its projection object in place.
-        const rawUsage = useProjection('tokenUsage');
-        const usage = normalizeUsage(rawUsage);
-        // The durable model selection: `{ lastUsed, next }` (or a bare selection on
-        // older hosts). `lastUsed` is the route that produced settled tokens.
-        const rawModelSelection = useProjection('modelSelection');
-        const models = liveModelInfo(rawModelSelection);
+    const EMPTY_MODELS = { used: null, selected: null };
+    /**
+     * Aggregate ledger rows into per-chat options, newest activity first.
+     *
+     * Only chats with at least one recorded turn are listed: a row contributes
+     * `entries > 0`, and the followed chat contributes live tokens as soon as its
+     * first turn starts. A blank New Session draft therefore never appears.
+     */
+    function buildChatOptions(ledgerEntries, activeChatId, activeTokens) {
+        const map = new Map();
+        for (const entry of ledgerEntries) {
+            const id = entry.sessionId;
+            if (typeof id !== 'string' || id.length === 0)
+                continue;
+            const title = cleanTitle(entry.sessionTitle);
+            const existing = map.get(id);
+            if (existing === undefined) {
+                map.set(id, {
+                    sessionId: id,
+                    title,
+                    entries: 1,
+                    tokens: usageTotal(entry.usage),
+                    costRmb: entryCostRmb(entry),
+                    lastAt: entry.at,
+                });
+                continue;
+            }
+            if (title !== null)
+                existing.title = title;
+            existing.entries += 1;
+            existing.tokens += usageTotal(entry.usage);
+            existing.costRmb += entryCostRmb(entry);
+            existing.lastAt = Math.max(existing.lastAt, entry.at);
+        }
+        if (activeChatId !== null) {
+            const tracked = map.get(activeChatId);
+            if (tracked !== undefined) {
+                tracked.tokens = Math.max(tracked.tokens, activeTokens);
+            }
+            else if (activeTokens > 0) {
+                // First turn of a brand-new chat: register it at the top immediately,
+                // before the asynchronous ledger poll lands.
+                map.set(activeChatId, {
+                    sessionId: activeChatId,
+                    title: null,
+                    entries: 0,
+                    tokens: activeTokens,
+                    costRmb: 0,
+                    lastAt: Date.now(),
+                });
+            }
+        }
+        return Array.from(map.values())
+            .filter((option) => option.entries > 0 || option.tokens > 0)
+            .sort((left, right) => right.lastAt - left.lastAt);
+    }
+    /**
+     * Live `tokenUsage` / `modelSelection` for exactly one chat, read at the root
+     * scope where no Session-scoped `useProjection` exists. The retained
+     * generation exposes an identity-stable face per projection key, so this
+     * follows the active chat's stream without the plugin holding the conversation
+     * open.
+     */
+    function useLiveSessionUsage(ctx, sessionId) {
+        const [state, setState] = (0, react_1.useState)({
+            usage: null,
+            models: EMPTY_MODELS,
+        });
+        (0, react_1.useEffect)(() => {
+            setState({ usage: null, models: EMPTY_MODELS });
+            if (ctx === null || sessionId === null)
+                return;
+            const sessions = ctx.sessions;
+            if (sessions === undefined || typeof sessions.retain !== 'function')
+                return;
+            let cancelled = false;
+            let subscribed = false;
+            let reference = null;
+            const disposers = [];
+            const read = () => {
+                if (cancelled || subscribed)
+                    return;
+                try {
+                    const session = reference.binding.session;
+                    const usageFace = session.projections.faceOf('tokenUsage');
+                    const modelFace = session.projections.faceOf('modelSelection');
+                    subscribed = true;
+                    const publish = () => {
+                        if (cancelled)
+                            return;
+                        try {
+                            setState({
+                                usage: normalizeUsage(usageFace.getSnapshot()),
+                                models: liveModelInfo(modelFace.getSnapshot()),
+                            });
+                        }
+                        catch {
+                            /* a torn-down generation must never break the panel */
+                        }
+                    };
+                    publish();
+                    if (typeof usageFace.subscribe === 'function')
+                        disposers.push(usageFace.subscribe(publish));
+                    if (typeof modelFace.subscribe === 'function')
+                        disposers.push(modelFace.subscribe(publish));
+                }
+                catch {
+                    /* projections appear once the retained generation opens */
+                }
+            };
+            try {
+                reference = sessions.retain(sessionId, { source: 'usagePopup' });
+                read();
+                const ready = reference.ready;
+                if (ready !== undefined && typeof ready.then === 'function') {
+                    ready.then(read).catch(() => undefined);
+                }
+            }
+            catch {
+                /* unknown session on this surface: fall back to ledger rows */
+            }
+            return () => {
+                cancelled = true;
+                for (const dispose of disposers) {
+                    try {
+                        dispose();
+                    }
+                    catch {
+                        /* already disposed */
+                    }
+                }
+                try {
+                    reference?.release?.();
+                }
+                catch {
+                    /* already released */
+                }
+            };
+        }, [ctx, sessionId]);
+        return state;
+    }
+    // ---------------------------------------------------------------------------
+    // Session / chat selector (rendered in the Session tab)
+    // ---------------------------------------------------------------------------
+    const chatSelectRootStyle = {
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        minWidth: 0,
+        flex: '0 1 auto',
+    };
+    const chatSelectButtonStyle = (open) => ({
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        minWidth: 0,
+        maxWidth: 232,
+        padding: '2px 8px',
+        border: '1px solid var(--dsw-alias-border-l1, rgba(128,128,128,.35))',
+        borderRadius: 8,
+        background: open
+            ? 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,.18))'
+            : 'transparent',
+        color: 'var(--dsw-alias-label-primary, inherit)',
+        font: 'inherit',
+        fontSize: 11,
+        lineHeight: '18px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        textAlign: 'left',
+    });
+    const chatSelectTitleStyle = {
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+    };
+    const chatSelectChevronStyle = {
+        flex: '0 0 auto',
+        fontSize: 9,
+        opacity: 0.6,
+    };
+    const chatSelectDotStyle = {
+        width: 6,
+        height: 6,
+        flex: '0 0 auto',
+        borderRadius: 999,
+        background: 'var(--dsw-alias-state-success-primary, #3fb950)',
+    };
+    const chatSelectMenuStyle = {
+        zIndex: HUD_Z_INDEX + 1,
+        width: 320,
+        maxHeight: 300,
+        overflowY: 'auto',
+        padding: 4,
+        border: '1px solid var(--dsw-alias-border-l1, rgba(128,128,128,.35))',
+        borderRadius: 10,
+        background: 'var(--dsw-alias-bg-overlay, Canvas)',
+        color: 'var(--dsw-alias-label-primary, CanvasText)',
+        boxShadow: '0 10px 28px rgba(0,0,0,.4)',
+    };
+    const chatSelectRowStyle = (selected) => ({
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) auto',
+        columnGap: 8,
+        rowGap: 1,
+        width: '100%',
+        padding: '6px 8px',
+        border: 0,
+        borderRadius: 7,
+        background: selected
+            ? 'rgba(126, 224, 189, 0.14)'
+            : 'transparent',
+        color: 'inherit',
+        font: 'inherit',
+        fontSize: 11,
+        lineHeight: '16px',
+        textAlign: 'left',
+        cursor: 'pointer',
+    });
+    const currentChatPillStyle = {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 8px',
+        border: '1px solid var(--dsw-alias-border-l1, rgba(128,128,128,.35))',
+        borderRadius: 999,
+        background: 'rgba(126, 224, 189, 0.12)',
+        color: '#7ee0bd',
+        font: 'inherit',
+        fontSize: 10,
+        lineHeight: '16px',
+        fontWeight: 650,
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+    };
+    function chatOptionTitle(option) {
+        if (option.title !== null && option.title.length > 0)
+            return option.title;
+        if (option.sessionId.length > 0)
+            return `Chat ${option.sessionId.slice(0, 8)}`;
+        return 'Untitled chat';
+    }
+    function chatOptionAge(lastAt) {
+        const delta = Date.now() - lastAt;
+        if (!Number.isFinite(delta) || delta <= 0)
+            return 'just now';
+        if (delta < 60_000)
+            return 'just now';
+        if (delta < 3_600_000)
+            return `${Math.round(delta / 60_000)}m ago`;
+        if (delta < 86_400_000)
+            return `${Math.round(delta / 3_600_000)}h ago`;
+        return `${Math.round(delta / 86_400_000)}d ago`;
+    }
+    function ChatSelect({ options, value, onChange, }) {
+        const [open, setOpen] = (0, react_1.useState)(false);
+        const [anchor, setAnchor] = (0, react_1.useState)(null);
+        const buttonRef = (0, react_1.useRef)(null);
+        const menuRef = (0, react_1.useRef)(null);
+        const selected = options.find((option) => option.sessionId === value) ?? null;
+        (0, react_1.useEffect)(() => {
+            if (!open)
+                return;
+            const onPointerDown = (event) => {
+                const target = event.target;
+                if (!(target instanceof Node))
+                    return;
+                if (menuRef.current?.contains(target) === true)
+                    return;
+                if (buttonRef.current?.contains(target) === true)
+                    return;
+                setOpen(false);
+            };
+            const onKeyDown = (event) => {
+                if (event.key === 'Escape')
+                    setOpen(false);
+            };
+            document.addEventListener('pointerdown', onPointerDown, true);
+            document.addEventListener('keydown', onKeyDown);
+            return () => {
+                document.removeEventListener('pointerdown', onPointerDown, true);
+                document.removeEventListener('keydown', onKeyDown);
+            };
+        }, [open]);
+        const toggle = () => {
+            if (open) {
+                setOpen(false);
+                return;
+            }
+            const rect = buttonRef.current?.getBoundingClientRect();
+            if (rect !== undefined) {
+                const left = Math.min(Math.max(VIEWPORT_MARGIN, rect.left), Math.max(VIEWPORT_MARGIN, window.innerWidth - 320 - VIEWPORT_MARGIN));
+                setAnchor({ left, top: rect.bottom + 4, width: rect.width });
+            }
+            setOpen(true);
+        };
+        return ((0, jsx_runtime_1.jsxs)("div", { style: chatSelectRootStyle, children: [(0, jsx_runtime_1.jsxs)("button", { ref: buttonRef, type: "button", style: chatSelectButtonStyle(open), "aria-haspopup": "listbox", "aria-expanded": open, "aria-label": "Select a chat stored in the ledger", title: selected === null
+                        ? 'Select a chat stored in the ledger'
+                        : `${chatOptionTitle(selected)} · ${selected.entries.toLocaleString()} entries`, onClick: toggle, "data-usage-hud-no-drag": "", children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: chatSelectDotStyle }), (0, jsx_runtime_1.jsx)("span", { style: chatSelectTitleStyle, children: selected === null ? 'Select chat' : chatOptionTitle(selected) }), (0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: chatSelectChevronStyle, children: "\u25BE" })] }), open &&
+                    anchor !== null &&
+                    (0, react_dom_1.createPortal)((0, jsx_runtime_1.jsx)("div", { ref: menuRef, role: "listbox", "aria-label": "Chats stored in the ledger", "data-usage-hud-no-drag": "", style: { ...chatSelectMenuStyle, position: 'fixed', left: anchor.left, top: anchor.top }, children: options.length === 0 ? ((0, jsx_runtime_1.jsx)("div", { style: { ...tinyHintStyle, padding: '6px 8px' }, children: "No recorded chats yet." })) : (options.map((option) => ((0, jsx_runtime_1.jsxs)("button", { type: "button", role: "option", "aria-selected": option.sessionId === value, style: chatSelectRowStyle(option.sessionId === value), onClick: () => {
+                                onChange(option.sessionId);
+                                setOpen(false);
+                            }, onMouseEnter: (event) => {
+                                event.currentTarget.style.background = 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,.18))';
+                            }, onMouseLeave: (event) => {
+                                event.currentTarget.style.background =
+                                    option.sessionId === value ? 'rgba(126, 224, 189, 0.14)' : 'transparent';
+                            }, children: [(0, jsx_runtime_1.jsx)("span", { style: chatSelectTitleStyle, children: chatOptionTitle(option) }), (0, jsx_runtime_1.jsxs)("span", { style: { ...countdownStyle, textAlign: 'right' }, children: [option.entries.toLocaleString(), " ent \u00B7 ", compactCount(option.tokens), " tok"] }), (0, jsx_runtime_1.jsxs)("span", { style: { ...countdownStyle, opacity: 0.55 }, children: [yuan(option.costRmb), " \u00B7 ", chatOptionAge(option.lastAt)] }), (0, jsx_runtime_1.jsx)("span", { style: { ...countdownStyle, textAlign: 'right', opacity: 0.55 }, children: option.sessionId.slice(0, 8) })] }, option.sessionId)))) }), document.body)] }));
+    }
+    function LedgerHud(props) {
+        const { useSessions, usePanelInfo, controller, open } = props;
+        // The app's active chat. `mainView` is the retention source the workspace
+        // tree and its shortcuts use to identify the selected Session; a blank New
+        // Session draft is not a chat yet. A global panel (Plugins, Automation
+        // tasks, Memory System, ...) hides the conversation entirely, so there is no
+        // active chat to follow there even though a Session stays retained.
+        const panelId = usePanelInfo((info) => info.activePanelId);
+        const mainViewChatId = useSessions((list) => {
+            for (const id of Object.keys(list.byId)) {
+                const row = list.byId[id];
+                if (row !== undefined && row.blank !== true && (row.retainedBy.mainView ?? 0) > 0)
+                    return id;
+            }
+            return null;
+        });
+        const activeChatId = panelId === null ? mainViewChatId : null;
+        // Live projection of exactly the followed chat. Historical chats are read
+        // from the ledger instead (below), which is already per-session.
+        const live = useLiveSessionUsage(controller.ctx, activeChatId);
+        // Manual override: a historical chat chosen from the Session dropdown.
+        const [lockedChatId, setLockedChatId] = (0, react_1.useState)(null);
+        // Opening the ledger always resumes live tracking, even if the previous
+        // visit ended on a historical chat.
+        (0, react_1.useEffect)(() => {
+            if (open)
+                setLockedChatId(null);
+        }, [open]);
         // The host's window caption band (Windows only) must never be part of the
         // draggable area. Recomputed on render so a fullscreen toggle recovers.
         const topInset = hudTopInset();
-        const [visible, setVisible] = (0, react_1.useState)(() => readStoredFlag(VISIBLE_KEY, true));
         const [minimized, setMinimized] = (0, react_1.useState)(() => readStoredFlag(MINIMIZED_KEY, false));
-        // Which face the HUD shows: the usage ledger or the merged token-saver
-        // dashboard. Both share the same floating card, so the composer dock has
-        // exactly one control.
         const [panel, setPanel] = (0, react_1.useState)('usage');
         // Local per-model / per-session token counters fetched from the tier router.
         // `null` means the router is absent or has not recorded a call yet.
@@ -2940,16 +3369,51 @@ window.__ModuleLoader__.load({
         const syncInFlightRef = (0, react_1.useRef)(false);
         const lastSyncAttemptRef = (0, react_1.useRef)(0);
         const hostPollInFlightRef = (0, react_1.useRef)(false);
-        const propSessionId = sessionId == null ? null : String(sessionId);
-        const sessionKey = propSessionId ?? domSessionId;
-        const currentModel = models.selected ?? domModel;
-        const lastUsedModel = models.used ?? domModel;
-        const runtimeTitle = runtimeSessionTitle(props);
+        const activeTotalLive = live.usage === null ? 0 : usageTotal(live.usage);
+        // Every chat stored in the ledger, newest activity first. A live chat with a
+        // first turn but no ledger row yet (host poll is asynchronous) is inserted at
+        // the top immediately; unstarted drafts with no turns never enter the list.
+        const chatOptions = (0, react_1.useMemo)(() => buildChatOptions(ledgerEntries, activeChatId, activeTotalLive), [ledgerEntries, activeChatId, activeTotalLive]);
+        const fallbackChatId = chatOptions.length > 0 ? chatOptions[0].sessionId : null;
+        // Auto target: the chat the app has open, else the most recently active one
+        // in the ledger (New Session, Plugins, Automation tasks, Memory System, ...).
+        const autoChatId = activeChatId ?? fallbackChatId;
+        // Priority: manual lock → auto target → DOM fallback.
+        const sessionKey = lockedChatId ?? autoChatId ?? domSessionId;
+        // A lock that points at the auto target is not an override; it is the same
+        // live chat, so no "Current chat" snap-back pill is needed.
+        const manualOverride = lockedChatId !== null && lockedChatId !== autoChatId;
+        const followingChat = sessionKey !== null && sessionKey === activeChatId;
+        // Only the followed chat may show the live projection; a historical chat is
+        // a pure ledger slice so its numbers never borrow the open chat's tokens.
+        const usage = followingChat ? live.usage : null;
+        const models = followingChat ? live.models : EMPTY_MODELS;
+        const currentModel = followingChat ? (models.selected ?? domModel) : null;
+        const selectedRowTitle = useSessions((list) => sessionKey === null
+            ? null
+            : (list.byId[sessionKey]?.displayTitle ?? null));
+        const chatOption = chatOptions.find((option) => option.sessionId === sessionKey);
+        const runtimeTitle = followingChat
+            ? runtimeSessionTitle(props)
+            : null;
         const sessionTitle = runtimeTitle ??
+            chatOption?.title ??
+            (selectedRowTitle !== null && selectedRowTitle !== sessionKey ? selectedRowTitle : null) ??
             (domSessionTitle.sessionKey === sessionKey ? domSessionTitle.title : null) ??
             (sessionKey === null ? 'No active chat' : `Chat ${sessionKey.slice(0, 8)}`);
+        // Durable title of the chat the app has open, used for the anchor and for
+        // the ledger rows the projection path writes. It is independent of the
+        // Session-tab selection.
+        const activeRowTitle = useSessions((list) => activeChatId === null
+            ? null
+            : (list.byId[activeChatId]?.displayTitle ?? null));
+        const activeChatOption = chatOptions.find((option) => option.sessionId === activeChatId);
+        const activeChatTitle = activeChatId === null
+            ? 'No active chat'
+            : activeRowTitle !== null && activeRowTitle !== activeChatId
+                ? activeRowTitle
+                : (activeChatOption?.title ?? `Chat ${activeChatId.slice(0, 8)}`);
         const activeTotal = usage === null ? 0 : usageTotal(usage);
-        const contextBloat = activeTotal > CONTEXT_BLOAT_TOKENS;
         const naturalPeak = isPeakUtc(new Date(nowMs));
         const targetRunwayDays = (0, react_1.useMemo)(() => {
             const parsed = Number(runwayDraft);
@@ -3014,6 +3478,7 @@ window.__ModuleLoader__.load({
             ? usage
             : selectedLedgerUsage;
         const displayedTotal = usageTotal(displayedUsage);
+        const contextBloat = timeframe === 'session' && displayedTotal > CONTEXT_BLOAT_TOKENS;
         const untrackedTokens = timeframe === 'session' ? Math.max(0, activeTotal - usageTotal(selectedLedgerUsage)) : 0;
         const hitRatio = (() => {
             const input = displayedUsage.uncachedInputTokens + displayedUsage.cacheReadTokens;
@@ -3074,7 +3539,7 @@ window.__ModuleLoader__.load({
         const proUsed = modelTokens.pro > 0;
         const usedLabel = flashUsed && proUsed ? 'Mixed' : proUsed ? 'Pro' : flashUsed ? 'Flash' : null;
         const liveLabel = usedLabel ?? (currentModel === 'pro' ? 'Pro' : currentModel === 'flash' ? 'Flash' : null);
-        const badgeText = `Live · ${liveLabel ?? '—'}`;
+        const badgeText = `${followingChat ? 'Live' : 'History'} · ${liveLabel ?? '—'}`;
         const badgeTitle = `True tracked cost. Flash ${exactCount(modelTokens.flash)} tok · Pro ${exactCount(modelTokens.pro)} tok. Each delta is priced at the model and UTC peak/off-peak tier active when it arrived.`;
         const liveSessionCost = (0, react_1.useMemo)(() => ledgerEntries.reduce((sum, entry) => (entry.sessionId === sessionKey ? sum + entryCostRmb(entry) : sum), 0), [ledgerEntries, sessionKey]);
         const todaySpend = (0, react_1.useMemo)(() => ledgerEntries.reduce((sum, entry) => entry.at >= dayStart && entry.at < dayEnd ? sum + entryCostRmb(entry) : sum, 0), [ledgerEntries, dayStart, dayEnd]);
@@ -3205,43 +3670,6 @@ window.__ModuleLoader__.load({
                 return 1;
             return Math.max(1 / 24, (nowMs - periodWindowStart) / DAY_MS);
         }, [periodWindowStart, nowMs]);
-        const trackedSessions = (0, react_1.useMemo)(() => {
-            const map = new Map();
-            for (const entry of ledgerEntries) {
-                const existing = map.get(entry.sessionId);
-                if (existing === undefined) {
-                    map.set(entry.sessionId, {
-                        sessionId: entry.sessionId,
-                        title: entry.sessionTitle,
-                        tokens: usageTotal(entry.usage),
-                        costRmb: entryCostRmb(entry),
-                        lastAt: entry.at,
-                    });
-                    continue;
-                }
-                existing.title = entry.sessionTitle;
-                existing.tokens += usageTotal(entry.usage);
-                existing.costRmb += entryCostRmb(entry);
-                existing.lastAt = Math.max(existing.lastAt, entry.at);
-            }
-            if (sessionKey !== null) {
-                const current = map.get(sessionKey);
-                if (current === undefined) {
-                    map.set(sessionKey, {
-                        sessionId: sessionKey,
-                        title: sessionTitle,
-                        tokens: activeTotal,
-                        costRmb: 0,
-                        lastAt: Date.now(),
-                    });
-                }
-                else {
-                    current.title = sessionTitle;
-                    current.tokens = Math.max(current.tokens, activeTotal);
-                }
-            }
-            return Array.from(map.values()).sort((left, right) => right.lastAt - left.lastAt);
-        }, [ledgerEntries, sessionKey, sessionTitle, activeTotal]);
         const nextSwitch = (0, react_1.useMemo)(() => nextRateSwitch(nowMs), [nowMs]);
         const countdown = formatClockCountdown(nextSwitch.at - nowMs);
         const countdownLabel = `${nextSwitch.tier === 'peak' ? 'Peak' : 'Off-Peak'} in ${countdown}`;
@@ -3274,9 +3702,6 @@ window.__ModuleLoader__.load({
                         : `synced ${formatAgo(nowMs - balanceMeta.syncedAt)}`;
         // --- persistence effects --------------------------------------------------
         (0, react_1.useEffect)(() => {
-            writeStored(VISIBLE_KEY, visible ? '1' : '0');
-        }, [visible]);
-        (0, react_1.useEffect)(() => {
             writeStored(MINIMIZED_KEY, minimized ? '1' : '0');
         }, [minimized]);
         (0, react_1.useEffect)(() => {
@@ -3295,7 +3720,7 @@ window.__ModuleLoader__.load({
         // what its adapters reported, so this works for Google/Z.ai routes too with
         // no provider API. Failure is non-fatal: the DeepSeek ledger breakdown stays.
         (0, react_1.useEffect)(() => {
-            if (!visible || minimized || panel !== 'usage')
+            if (!open || minimized || panel !== 'usage')
                 return;
             let cancelled = false;
             let timer = 0;
@@ -3325,7 +3750,7 @@ window.__ModuleLoader__.load({
                 cancelled = true;
                 window.clearTimeout(timer);
             };
-        }, [visible, minimized, panel, sessionKey]);
+        }, [open, minimized, panel, sessionKey]);
         // Fold any legacy per-session ledgers into the global database once on mount.
         (0, react_1.useEffect)(() => {
             const database = mergeLedger(ledgerRef.current, migrateLegacyLedgers());
@@ -3458,15 +3883,18 @@ window.__ModuleLoader__.load({
             };
         }, []);
         // --- true delta attribution ----------------------------------------------
-        // Runs on every cumulative usage change; a zero or negative delta only
-        // resyncs the anchor (and never invents a refund). Anchors are re-read from
-        // storage before every write so sibling HUD instances cannot clobber them.
+        // Runs on every cumulative usage change of the ACTIVE chat; a zero or
+        // negative delta only resyncs the anchor (and never invents a refund).
+        // Anchors are re-read from storage before every write so sibling HUD
+        // instances cannot clobber them. Selecting a historical chat in the Session
+        // tab never changes what is tracked here: the live chat keeps recording while
+        // the user reads the past.
         (0, react_1.useEffect)(() => {
-            if (sessionKey === null || usage === null)
+            if (activeChatId === null || live.usage === null)
                 return;
             const anchors = readAnchors();
-            const anchor = anchors[sessionKey];
-            const attributed = lastUsedModel ?? currentModel ?? anchor?.lastModel ?? 'flash';
+            const anchor = anchors[activeChatId];
+            const attributed = live.models.used ?? live.models.selected ?? anchor?.lastModel ?? 'flash';
             const saveAnchor = (next) => {
                 anchors[next.sessionId] = next;
                 writeAnchors(anchors);
@@ -3478,13 +3906,13 @@ window.__ModuleLoader__.load({
             // cleanly from the current totals.
             if (resolveProjectionMode(hostProbe) === 'skip') {
                 if (anchor === undefined ||
-                    !sameUsage(usage, anchor.lastUsage) ||
+                    !sameUsage(live.usage, anchor.lastUsage) ||
                     anchor.lastModel !== attributed ||
-                    anchor.sessionTitle !== sessionTitle) {
+                    anchor.sessionTitle !== activeChatTitle) {
                     saveAnchor({
-                        sessionId: sessionKey,
-                        sessionTitle,
-                        lastUsage: usage,
+                        sessionId: activeChatId,
+                        sessionTitle: activeChatTitle,
+                        lastUsage: live.usage,
                         lastModel: attributed,
                         updatedAt: Date.now(),
                     });
@@ -3495,24 +3923,24 @@ window.__ModuleLoader__.load({
                 // First sight of this Session: anchor at the current totals, record no
                 // cost. Everything after this point is a true incremental delta.
                 saveAnchor({
-                    sessionId: sessionKey,
-                    sessionTitle,
-                    lastUsage: usage,
+                    sessionId: activeChatId,
+                    sessionTitle: activeChatTitle,
+                    lastUsage: live.usage,
                     lastModel: attributed,
                     updatedAt: Date.now(),
                 });
                 return;
             }
-            const delta = usageDelta(usage, anchor.lastUsage);
-            const titleChanged = anchor.sessionTitle !== sessionTitle;
+            const delta = usageDelta(live.usage, anchor.lastUsage);
+            const titleChanged = anchor.sessionTitle !== activeChatTitle;
             // A reload/reset can make the cumulative projection briefly report less
             // than the anchor. Lowering the anchor here would re-bill every token when
             // the real total comes back, so keep the high-water mark instead.
-            if (usageTotal(usage) < usageTotal(anchor.lastUsage)) {
-                if (anchor.sessionTitle !== sessionTitle || anchor.lastModel !== attributed) {
+            if (usageTotal(live.usage) < usageTotal(anchor.lastUsage)) {
+                if (anchor.sessionTitle !== activeChatTitle || anchor.lastModel !== attributed) {
                     saveAnchor({
                         ...anchor,
-                        sessionTitle,
+                        sessionTitle: activeChatTitle,
                         lastModel: attributed,
                         updatedAt: Date.now(),
                     });
@@ -3520,16 +3948,20 @@ window.__ModuleLoader__.load({
                 return;
             }
             if (isZeroUsage(delta)) {
-                if (!sameUsage(usage, anchor.lastUsage) || anchor.lastModel !== attributed || titleChanged) {
+                if (!sameUsage(live.usage, anchor.lastUsage) ||
+                    anchor.lastModel !== attributed ||
+                    titleChanged) {
                     saveAnchor({
                         ...anchor,
-                        sessionTitle,
-                        lastUsage: usage,
+                        sessionTitle: activeChatTitle,
+                        lastUsage: live.usage,
                         lastModel: attributed,
                         updatedAt: Date.now(),
                     });
                     if (titleChanged) {
-                        const updated = mergeLedger(ledgerRef.current, readLedgerDatabase()).map((entry) => entry.sessionId === sessionKey ? { ...entry, sessionTitle } : entry);
+                        const updated = mergeLedger(ledgerRef.current, readLedgerDatabase()).map((entry) => entry.sessionId === activeChatId
+                            ? { ...entry, sessionTitle: activeChatTitle }
+                            : entry);
                         writeUniversalLedger(updated);
                         ledgerRef.current = updated;
                         setLedgerEntries(updated);
@@ -3542,8 +3974,8 @@ window.__ModuleLoader__.load({
             const tier = peakTier(isPeakUtc(new Date(at)));
             const entry = {
                 id: makeEntryId(),
-                sessionId: sessionKey,
-                sessionTitle,
+                sessionId: activeChatId,
+                sessionTitle: activeChatTitle,
                 date: localDateKey(at),
                 model: attributed,
                 tier,
@@ -3563,13 +3995,13 @@ window.__ModuleLoader__.load({
             setLedgerEntries(nextEntries);
             notifyLedgerChanged();
             saveAnchor({
-                sessionId: sessionKey,
-                sessionTitle,
-                lastUsage: usage,
+                sessionId: activeChatId,
+                sessionTitle: activeChatTitle,
+                lastUsage: live.usage,
                 lastModel: attributed,
                 updatedAt: at,
             });
-        }, [usage, sessionKey, lastUsedModel, currentModel, sessionTitle, hostProbe]);
+        }, [activeChatId, live.usage, live.models, activeChatTitle, hostProbe]);
         // Keep the DOM fallbacks current without reading transcript text: model-seat
         // contributions write data-model-id / data-provider-id and aria-label, and
         // the active session row/header supplies a best-effort id and title.
@@ -3605,8 +4037,10 @@ window.__ModuleLoader__.load({
                     'title',
                     'data-session-title',
                     'data-session-id',
+                    'data-row-key',
                     'data-active-session-id',
                     'aria-current',
+                    'aria-selected',
                     'data-active',
                     'data-state',
                 ],
@@ -3763,7 +4197,7 @@ window.__ModuleLoader__.load({
         // measured size decides the lower bound, so the first render from storage is
         // corrected before paint.
         (0, react_1.useLayoutEffect)(() => {
-            if (!visible)
+            if (!open)
                 return;
             const card = hudRef.current;
             if (card === null)
@@ -3774,7 +4208,7 @@ window.__ModuleLoader__.load({
                 rememberPosition(next);
                 persistPosition(next);
             }
-        }, [visible, minimized, usage === null, timeframe, keyEditorOpen, apiKey.length, topInset]);
+        }, [open, minimized, usage === null, timeframe, keyEditorOpen, apiKey.length, topInset]);
         // A viewport resize must not strand the HUD off-screen.
         (0, react_1.useEffect)(() => {
             const onResize = () => {
@@ -3791,7 +4225,7 @@ window.__ModuleLoader__.load({
             window.addEventListener('resize', onResize);
             return () => window.removeEventListener('resize', onResize);
         }, [topInset]);
-        const toggleVisible = () => setVisible((current) => !current);
+        const closePanel = () => controller.setOpen(false);
         const toggleMinimized = () => setMinimized((current) => !current);
         const handleDragStart = (event) => {
             if (event.button !== 0)
@@ -3925,12 +4359,12 @@ window.__ModuleLoader__.load({
             setLedgerEntries([]);
             notifyLedgerChanged();
             const freshAnchors = {};
-            if (sessionKey !== null && usage !== null) {
-                freshAnchors[sessionKey] = {
-                    sessionId: sessionKey,
-                    sessionTitle,
-                    lastUsage: usage,
-                    lastModel: lastUsedModel ?? currentModel ?? 'flash',
+            if (activeChatId !== null && live.usage !== null) {
+                freshAnchors[activeChatId] = {
+                    sessionId: activeChatId,
+                    sessionTitle: activeChatTitle,
+                    lastUsage: live.usage,
+                    lastModel: live.models.used ?? live.models.selected ?? 'flash',
                     updatedAt: Date.now(),
                 };
             }
@@ -3962,70 +4396,66 @@ window.__ModuleLoader__.load({
             ['Output', displayedUsage.outputTokens],
         ];
         const customDays = customStart.length > 0 && customEnd.length > 0 ? inclusiveDays(customStart, customEnd) : 1;
-        return ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsxs)("button", { type: "button", className: "usage-popup", "data-composer-stat": "usage-popup", "aria-pressed": visible, "aria-label": visible ? 'Hide the token usage HUD' : 'Show the token usage HUD', title: visible ? 'Hide token usage HUD' : 'Show token usage HUD', onClick: toggleVisible, style: dockButtonStyle(visible), children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: dockDotStyle(visible) }), (0, jsx_runtime_1.jsx)("span", { style: contextBloat ? bloatTextStyle : undefined, children: activeTotal === 0 ? 'Usage: —' : `Usage: ${compactCount(activeTotal)} tok` }), (0, jsx_runtime_1.jsx)("span", { style: dockStateStyle, children: visible ? 'HUD on' : 'HUD off' })] }), visible && (0, react_dom_1.createPortal)((0, jsx_runtime_1.jsxs)("div", { ref: hudRef, className: "usage-popup__hud", "data-usage-popup-hud": "", role: "region", "aria-label": "True-sync universal multi-chat token usage and RMB cost ledger", style: hudStyle(position, minimized, dragging, topInset), children: [(0, jsx_runtime_1.jsxs)("div", { className: "usage-popup__hud-handle", style: handleStyle(minimized, dragging), title: "Drag to move", onPointerDown: handleDragStart, onPointerMove: handleDragMove, onPointerUp: finishDrag, onPointerCancel: finishDrag, onLostPointerCapture: handleLostPointerCapture, children: [(0, jsx_runtime_1.jsx)("span", { style: gripStyle, "aria-hidden": "true", children: (0, jsx_runtime_1.jsx)(GripGlyph, {}) }), minimized ? ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("span", { style: contextBloat ? { ...pillTextStyle, ...bloatTextStyle } : pillTextStyle, title: contextBloat
-                                                ? `Runaway context: ${exactCount(activeTotal)} tokens in the active chat (over 1.5M).`
-                                                : 'Active chat tokens', children: activeTotal === 0 ? 'Usage —' : `Usage ${compactCount(activeTotal)} tok` }), (0, jsx_runtime_1.jsxs)("span", { style: pillStatsStyle, title: "Live true session cost \u00B7 true CNY balance remaining (api.deepseek.com)", children: [yuan(liveSessionCost), " \u00B7 ", trueBalance === null ? '— left' : `${yuan(trueBalance)} left`] })] })) : ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("span", { style: titleStyle, children: "True-sync ledger" }), (0, jsx_runtime_1.jsx)("span", { style: contextBloat ? { ...headerTotalStyle, ...bloatTextStyle } : headerTotalStyle, title: contextBloat
-                                                ? `Runaway context: ${exactCount(activeTotal)} tokens in the active chat (over 1.5M).`
-                                                : `${exactCount(activeTotal)} tokens in the active chat`, children: activeTotal === 0 ? '—' : `${compactCount(activeTotal)} tok` })] })), (0, jsx_runtime_1.jsx)("button", { type: "button", "data-usage-hud-no-drag": "", "aria-label": minimized ? 'Expand the token usage HUD' : 'Minimize the token usage HUD', "aria-pressed": minimized, title: minimized ? 'Expand' : 'Minimize', onClick: toggleMinimized, style: iconButtonStyle, children: (0, jsx_runtime_1.jsx)(CollapseGlyph, { collapsed: minimized }) })] }), !minimized && ((0, jsx_runtime_1.jsxs)("div", { style: bodyStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: { ...segmentGroupStyle, marginBottom: 8 }, role: "group", "aria-label": "Usage panel", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", "aria-pressed": panel === 'usage', onClick: () => setPanel('usage'), style: segmentButtonStyle(panel === 'usage'), children: "Usage" }), (0, jsx_runtime_1.jsx)("button", { type: "button", "aria-pressed": panel === 'saver', onClick: () => setPanel('saver'), style: segmentButtonStyle(panel === 'saver'), title: "dsh-plugin-save-token dashboard, merged into this HUD", children: "Token saver" })] }), panel === 'saver' ? ((0, jsx_runtime_1.jsx)(SaverPanel, {})) : ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("div", { style: timeframeGroupStyle, role: "group", "aria-label": "Usage timeframe", title: "Day, Week and Month always sum every saved chat in the global ledger. Custom also lets you include/exclude individual chats.", children: [
-                                                ['session', 'Session'],
-                                                ['day', 'Day'],
-                                                ['week', 'Week'],
-                                                ['month', 'Month'],
-                                                ['custom', 'Custom'],
-                                            ].map(([value, label]) => ((0, jsx_runtime_1.jsx)("button", { type: "button", "aria-pressed": timeframe === value, onClick: () => setTimeframe(value), style: timeframeButtonStyle(timeframe === value), children: label }, value))) }), (0, jsx_runtime_1.jsxs)("div", { style: scopeRowStyle, title: isGlobalScope
-                                                ? 'This view sums every chat in the universal ledger for the selected time range. It is not scoped to the open conversation.'
-                                                : 'This view is scoped to the currently open chat.', children: [(0, jsx_runtime_1.jsx)("span", { style: scopeBadgeStyle(isGlobalScope), children: isGlobalScope ? 'All chats · global' : 'This chat only' }), (0, jsx_runtime_1.jsx)("span", { style: countdownStyle, children: isGlobalScope
-                                                        ? `${ledgerEntries.length.toLocaleString()} ledger entries`
-                                                        : sessionKey === null
-                                                            ? 'no active chat'
-                                                            : `${selectedEntries.length.toLocaleString()} entries` })] }), timeframe === 'custom' && ((0, jsx_runtime_1.jsxs)("div", { style: customPanelStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: customDateRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "From" }), (0, jsx_runtime_1.jsx)("input", { type: "date", "aria-label": "Custom range start", value: customStart, max: customEnd.length > 0 ? customEnd : undefined, onChange: (event) => setCustomStart(event.target.value), style: dateInputStyle }), (0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "To" }), (0, jsx_runtime_1.jsx)("input", { type: "date", "aria-label": "Custom range end", value: customEnd, min: customStart.length > 0 ? customStart : undefined, onChange: (event) => setCustomEnd(event.target.value), style: dateInputStyle })] }), (0, jsx_runtime_1.jsx)("div", { style: { ...tinyHintStyle, marginTop: 6 }, children: "Global range: every chat in the ledger is included." })] })), (0, jsx_runtime_1.jsxs)("div", { style: hudColumnsStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: leftColumnStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: totalRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: timeframe === 'session' && contextBloat
-                                                                        ? { ...totalNumberStyle, ...bloatTextStyle }
-                                                                        : totalNumberStyle, title: timeframe === 'session' && contextBloat
-                                                                        ? `Runaway context: ${exactCount(activeTotal)} tokens in the active chat (over 1.5M).`
-                                                                        : undefined, children: exactCount(displayedTotal) }), (0, jsx_runtime_1.jsx)("span", { style: totalUnitStyle, children: timeframe === 'session'
-                                                                        ? 'session tokens'
-                                                                        : `${timeframeLabel.toLowerCase()} tokens` })] }), (0, jsx_runtime_1.jsxs)("div", { style: cacheHitStyle, children: [(0, jsx_runtime_1.jsx)("span", { children: "Cache hit" }), (0, jsx_runtime_1.jsx)("span", { style: cacheHitValueStyle, children: hitRatio === null ? '—' : percent(hitRatio) })] }), (0, jsx_runtime_1.jsx)("dl", { style: detailsStyle, children: breakdown.map(([label, value]) => ((0, jsx_runtime_1.jsxs)(react_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("dt", { style: labelStyle, children: label }), (0, jsx_runtime_1.jsx)("dd", { style: valueStyle, children: exactCount(value) })] }, label))) }), (0, jsx_runtime_1.jsxs)("div", { style: metricRowStyle, title: "RMB avoided by reading cached input instead of paying the uncached input rate.", children: [(0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "Cache savings" }), (0, jsx_runtime_1.jsx)("span", { style: savingsValueStyle, children: yuan(displaySavings) })] })] }), (0, jsx_runtime_1.jsxs)("div", { style: rightColumnStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: totalRowStyle, title: primaryUsesApi
-                                                                ? 'Primary spend: the measured API balance decrease in this window (top-ups ignored).'
-                                                                : 'Ledger estimate: priced token deltas at the model and UTC peak/off-peak tier active when they arrived.', children: [(0, jsx_runtime_1.jsx)("span", { style: totalNumberStyle, children: primaryUsesApi ? yuan(primaryPeriodCost) : `≈ ${yuan(primaryPeriodCost)}` }), (0, jsx_runtime_1.jsxs)("span", { style: totalUnitStyle, children: [timeframe === 'session'
-                                                                            ? 'session cost'
-                                                                            : `${timeframeLabel.toLowerCase()} cost`, primaryUsesApi ? ` · ${primaryPeriodLabel}` : ' · ledger estimate'] })] }), (0, jsx_runtime_1.jsx)("div", { style: liveBadgeRowStyle, children: (0, jsx_runtime_1.jsxs)("span", { style: liveBadgeStyle(usedLabel === 'Mixed'), title: badgeTitle, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: tierDotStyle }), badgeText] }) }), (0, jsx_runtime_1.jsxs)("div", { style: tierRowStyle, children: [(0, jsx_runtime_1.jsxs)("span", { style: tierBadgeStyle(naturalPeak), title: naturalPeak
-                                                                        ? 'Peak window: Mon–Fri 01:00–04:00 or 06:00–10:00 UTC — peak rate card'
-                                                                        : 'Off-peak: off-peak rate card (all weekend traffic is off-peak)', children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: tierDotStyle }), naturalPeak ? 'Peak' : 'Off-Peak'] }), (0, jsx_runtime_1.jsx)("span", { style: countdownStyle, title: "Live countdown to the next natural UTC peak/off-peak rate switch", children: countdownLabel })] }), burnPerCall !== null && ((0, jsx_runtime_1.jsxs)("div", { style: metricRowStyle, title: `Derived from recorded API calls in this window (${recordedCalls.toLocaleString()} call${recordedCalls === 1 ? '' : 's'}).`, children: [(0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "Avg burn / recorded call" }), (0, jsx_runtime_1.jsx)("span", { style: metricValueStyle, children: yuan(burnPerCall) })] })), (0, jsx_runtime_1.jsxs)("div", { style: metricRowStyle, title: "Sum of the priced ledger entries in this window. Reconciliation rows are included so this can be compared with the API balance delta.", children: [(0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "Ledger total" }), (0, jsx_runtime_1.jsx)("span", { style: metricValueStyle, children: yuan(ledgerPeriodSpend) })] }), reconciliationDrift !== null && Math.abs(reconciliationDrift) >= 0.005 && ((0, jsx_runtime_1.jsxs)("div", { style: tinyHintStyle, title: "Measured API balance \u0394 minus the ledger total for the same window.", children: ["API \u0394 vs ledger \u0394:", ' ', `${reconciliationDrift >= 0 ? '+' : ''}${yuan(reconciliationDrift)}`, " over", ' ', timeframeLabel.toLowerCase(), "."] }))] })] }), timeframe === 'session' && untrackedTokens > 0 && usage !== null && ((0, jsx_runtime_1.jsxs)("div", { style: tinyHintStyle, children: ["Tracking began after ~", compactCount(untrackedTokens), " earlier tokens in this chat; only tracked deltas are priced."] })), contextBloat && ((0, jsx_runtime_1.jsxs)("div", { style: { ...tinyHintStyle, ...bloatTextStyle, marginTop: 8 }, role: "status", children: ["Runaway context: ", exactCount(activeTotal), " tokens in this chat (over 1.5M)."] })), timeframe === 'session' && routedRows !== null ? ((0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "Models \u00B7 this session" }), (0, jsx_runtime_1.jsxs)("span", { style: sectionValueStyle, children: [compactCount(routedSessionTokens), " tok"] })] }), (0, jsx_runtime_1.jsx)("div", { style: modelBarStyle, "aria-hidden": "true", children: routedRows.map((row) => ((0, jsx_runtime_1.jsx)("div", { style: modelSegmentStyle(row.color, row.share), title: `${row.label}: ${exactCount(row.tokens)} tokens` }, row.key))) }), routedRows.map((row) => ((0, jsx_runtime_1.jsxs)("div", { style: modelRowStyle, title: `${row.label} · ${exactCount(row.tokens)} tokens · ${row.calls} call${row.calls === 1 ? '' : 's'}${row.costKnown
-                                                        ? ` · ${yuan(row.costRmb)}`
-                                                        : ' · local token count (no provider sync)'}`, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: modelDotStyle(row.color) }), (0, jsx_runtime_1.jsx)("span", { style: modelNameStyle, children: row.label }), (0, jsx_runtime_1.jsxs)("span", { style: modelTokensStyle, children: [compactCount(row.tokens), " tok"] }), (0, jsx_runtime_1.jsx)("span", { style: modelCostStyle, children: row.costKnown ? yuan(row.costRmb) : 'local' }), (0, jsx_runtime_1.jsx)("span", { style: modelShareStyle, children: percent(row.share) })] }, row.key))), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Local route counts from the tier router. DeepSeek rows are priced; other models stay tokens-only and are never synced against a provider API." })] })) : ((0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "Cost by model" }), (0, jsx_runtime_1.jsx)("span", { style: sectionValueStyle, children: yuan(trueSelectedCost) })] }), (0, jsx_runtime_1.jsx)("div", { style: modelBarStyle, "aria-hidden": "true", children: modelRows.map((row) => ((0, jsx_runtime_1.jsx)("div", { style: modelSegmentStyle(row.color, row.share), title: `${row.label}: ${yuan(row.costRmb)}` }, row.id))) }), modelRows.map((row) => ((0, jsx_runtime_1.jsxs)("div", { style: modelRowStyle, title: row.id === 'search'
-                                                        ? 'server-tool-search charges. Recorded only when the host ledger carries such entries; otherwise ¥0.00.'
-                                                        : `${row.label} · ${exactCount(row.tokens)} tokens · ${yuan(row.costRmb)}`, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: modelDotStyle(row.color) }), (0, jsx_runtime_1.jsx)("span", { style: modelNameStyle, children: row.label }), (0, jsx_runtime_1.jsx)("span", { style: modelTokensStyle, children: row.tokens === 0 ? '—' : `${compactCount(row.tokens)} tok` }), (0, jsx_runtime_1.jsx)("span", { style: modelCostStyle, children: yuan(row.costRmb) }), (0, jsx_runtime_1.jsx)("span", { style: modelShareStyle, children: row.costRmb <= 0 ? '0%' : percent(row.share) })] }, row.id)))] })), delegatedSummary.entries > 0 && ((0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "Subagents & background" }), (0, jsx_runtime_1.jsx)("span", { style: sectionValueStyle, children: delegatedSummary.tokens === 0
-                                                                ? '—'
-                                                                : `${compactCount(delegatedSummary.tokens)} tok` })] }), (0, jsx_runtime_1.jsxs)("div", { style: modelRowStyle, title: `${delegatedSummary.entries.toLocaleString()} recorded subagent/background/compaction ${delegatedSummary.entries === 1 ? 'entry' : 'entries'} · ${delegatedSummary.calls.toLocaleString()} call${delegatedSummary.calls === 1 ? '' : 's'}`, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: modelDotStyle(MODEL_COLORS.unattributed) }), (0, jsx_runtime_1.jsx)("span", { style: modelNameStyle, children: "Delegated & background" }), (0, jsx_runtime_1.jsx)("span", { style: modelTokensStyle, children: delegatedSummary.tokens === 0
-                                                                ? '—'
-                                                                : `${compactCount(delegatedSummary.tokens)} tok` }), (0, jsx_runtime_1.jsx)("span", { style: modelCostStyle, children: yuan(delegatedSummary.costRmb) }), (0, jsx_runtime_1.jsx)("span", { style: modelShareStyle, children: `${delegatedSummary.calls}×` })] }), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Calls recorded by the host collector outside the main chat thread. Their cost is included in the totals above." })] })), timeframe === 'session' && workerRows.length > 0 && ((0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "Fetch boys \u00B7 this run" }), (0, jsx_runtime_1.jsxs)("span", { style: sectionValueStyle, children: [compactCount(workerTokens), " tok"] })] }), workerRows.map((row) => ((0, jsx_runtime_1.jsxs)("div", { style: modelRowStyle, title: `${row.label} · ${exactCount(row.tokens)} tokens · ${row.calls} call${row.calls === 1 ? '' : 's'} · delegated session, local count only`, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: modelDotStyle(row.color) }), (0, jsx_runtime_1.jsx)("span", { style: modelNameStyle, children: row.label }), (0, jsx_runtime_1.jsxs)("span", { style: modelTokensStyle, children: [compactCount(row.tokens), " tok"] }), (0, jsx_runtime_1.jsx)("span", { style: modelCostStyle, children: "local" }), (0, jsx_runtime_1.jsxs)("span", { style: modelShareStyle, children: [row.calls, "\u00D7"] })] }, row.key))), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Delegated subagent sessions since the router last started. Tokens only \u2014 no provider sync." })] })), (0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "True balance" }), (0, jsx_runtime_1.jsxs)("span", { style: syncStatusStyle, title: "Automatic sync from api.deepseek.com/user/balance", children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: syncDotStyle(syncStatusColor) }), syncStatusLabel] }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setKeyEditorOpen((current) => !current), style: { ...linkButtonStyle, marginLeft: 'auto' }, title: "Add, replace or forget the saved DeepSeek API key", children: apiKey.length > 0 ? 'API key' : 'Add key' })] }), (0, jsx_runtime_1.jsxs)("div", { style: balanceHeadlineRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: {
-                                                                ...balanceHeadlineStyle,
-                                                                ...(trueBalance !== null && trueBalance <= 0 ? dangerTextStyle : {}),
-                                                            }, children: trueBalance === null ? '—' : yuan(trueBalance) }), (0, jsx_runtime_1.jsx)("span", { style: balanceHeadlineUnitStyle, children: "CNY \u00B7 source of truth" })] }), (0, jsx_runtime_1.jsxs)("div", { style: balanceGridStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: balanceMetricStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: balanceMetricLabelStyle, children: "Runway" }), (0, jsx_runtime_1.jsx)("span", { style: balanceMetricValueStyle, children: runwayLabel })] }), (0, jsx_runtime_1.jsxs)("div", { style: balanceMetricStyle, children: [(0, jsx_runtime_1.jsxs)("span", { style: balanceMetricLabelStyle, title: todayApiSpend !== null
-                                                                        ? 'API balance decrease since local midnight (top-ups ignored)'
-                                                                        : 'Ledger spend since local midnight', children: ["Today \u00B7 ", todayApiSpend !== null ? 'API Δ' : 'ledger'] }), (0, jsx_runtime_1.jsx)("span", { style: balanceMetricValueStyle, children: todayApiSpend !== null ? yuan(todayApiSpend) : `≈ ${yuan(todayDisplaySpend)}` })] }), (0, jsx_runtime_1.jsxs)("div", { style: balanceMetricStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: balanceMetricLabelStyle, title: "API balance decrease inside the selected window (top-ups ignored)", children: "True period spend" }), (0, jsx_runtime_1.jsx)("span", { style: balanceMetricValueStyle, title: periodSpendIsEstimate
-                                                                        ? 'Not enough /user/balance samples in this window yet; showing the local ledger estimate.'
-                                                                        : `Measured from ${balanceHistory.length} /user/balance samples.`, children: periodSpendLabel })] })] }), (0, jsx_runtime_1.jsxs)("div", { style: budgetRowStyle, children: [(0, jsx_runtime_1.jsxs)("label", { style: stopLabelStyle, title: "Target number of days the true balance should last", children: ["Target runway", (0, jsx_runtime_1.jsx)("input", { type: "number", min: 1, max: MAX_TARGET_RUNWAY_DAYS, step: 1, value: runwayDraft, onChange: (event) => setRunwayDraft(event.target.value), onBlur: () => setRunwayDraft(String(targetRunwayDays)), style: stopInputStyle }), "d"] }), (0, jsx_runtime_1.jsxs)("span", { style: dailyTargetStyle, title: "True API balance \u00F7 target runway", children: ["Daily target ", dailyTargetBudget === null ? '—' : yuan(dailyTargetBudget)] })] }), (0, jsx_runtime_1.jsx)("div", { style: gaugeTrackStyle, role: "progressbar", "aria-label": "Today's spend versus the daily target budget", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": budgetRatio === null ? 0 : Math.round(Math.min(1, budgetRatio) * 100), title: "Today's true tracked spend versus the balance-derived daily target budget.", children: (0, jsx_runtime_1.jsx)("div", { style: gaugeFillStyle(budgetRatio) }) }), (0, jsx_runtime_1.jsxs)("div", { style: budgetCaptionRowStyle, children: [(0, jsx_runtime_1.jsxs)("span", { children: ["Today ", yuan(todayDisplaySpend), " / ", dailyTargetBudget === null ? '—' : yuan(dailyTargetBudget), todayApiSpend !== null ? ' · API Δ' : ' · ledger'] }), (0, jsx_runtime_1.jsx)("span", { style: budgetRatio !== null && budgetRatio >= 1
-                                                                ? dangerTextStyle
-                                                                : budgetRatio !== null && budgetRatio >= 0.8
-                                                                    ? warnTextStyle
-                                                                    : undefined, children: budgetPercentLabel })] }), (keyEditorOpen || apiKey.length === 0) && ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsxs)("div", { style: syncRowStyle, children: [(0, jsx_runtime_1.jsx)("input", { type: "password", autoComplete: "off", spellCheck: false, "aria-label": "DeepSeek API key", placeholder: apiKey.length > 0 ? 'Replace API key' : 'sk-…', value: apiKeyDraft, onChange: (event) => setApiKeyDraft(event.target.value), onKeyDown: (event) => {
-                                                                        if (event.key === 'Enter')
-                                                                            saveApiKey();
-                                                                    }, style: passwordInputStyle }), (0, jsx_runtime_1.jsx)("button", { type: "button", disabled: apiKeyDraft.trim().length === 0, onClick: saveApiKey, style: {
-                                                                        ...primaryMiniButtonStyle,
-                                                                        opacity: apiKeyDraft.trim().length === 0 ? 0.55 : 1,
-                                                                    }, children: "Save key" }), apiKey.length > 0 && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => {
-                                                                        setKeyEditorOpen(false);
-                                                                        setApiKeyDraft('');
-                                                                        setSyncError(null);
-                                                                    }, style: miniButtonStyle, children: "Cancel" }))] }), apiKey.length > 0 && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: forgetApiKey, style: { ...linkButtonStyle, marginTop: 4 }, children: "Forget saved key" })), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Stored only in this browser's localStorage, base64-encoded, never included in JSON exports. The balance is fetched automatically every 5 minutes." })] })), syncError !== null && ((0, jsx_runtime_1.jsx)("div", { style: { ...tinyHintStyle, ...dangerTextStyle }, children: syncError })), syncNotice !== null && syncError === null && ((0, jsx_runtime_1.jsx)("div", { style: { ...tinyHintStyle, color: 'var(--dsw-alias-state-success-primary, #3fb950)' }, children: syncNotice })), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: apiKey.length === 0
-                                                        ? 'Add a DeepSeek API key to auto-sync the true CNY balance.'
-                                                        : balanceMeta === null
-                                                            ? 'Auto-sync runs on load and every 5 minutes.'
-                                                            : `Last sync ${new Date(balanceMeta.syncedAt).toLocaleString()} · ledger spend since sync ${yuan(postSyncSpend)}.` })] }), (0, jsx_runtime_1.jsxs)("div", { style: footerStyle, children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: exportLedger, style: miniButtonStyle, title: "Download the universal ledger as JSON", children: "Export" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => fileInputRef.current?.click(), style: miniButtonStyle, title: "Merge a universal ledger JSON export or a DeepSeek dashboard CSV / TSV / JSON export", children: "Import" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: resetLogs, style: miniButtonStyle, title: "Clear all local usage logs", children: "Reset" }), (0, jsx_runtime_1.jsxs)("span", { style: { ...sessionCountStyle, marginLeft: 'auto' }, children: [ledgerEntries.length.toLocaleString(), " entries \u00B7 ", trackedSessions.length, " chats"] }), (0, jsx_runtime_1.jsx)("input", { ref: fileInputRef, type: "file", accept: ".json,.csv,.tsv,application/json,text/csv,text/tab-separated-values", onChange: (event) => void importLedger(event), style: { display: 'none' } })] }), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: timeframe === 'custom'
-                                                ? `${customDays} day${customDays === 1 ? '' : 's'} · ${elapsedDays.toFixed(1)}d elapsed · ${balanceHistory.length} API balance samples`
-                                                : `${timeframeLabel} · ${balanceHistory.length} API balance samples · avg burn ${yuan(averageDailySpend)}/day` }), dataMessage !== null && (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: dataMessage }), usage === null && displayedTotal === 0 && ((0, jsx_runtime_1.jsx)("p", { style: hintStyle, children: "No session data yet." }))] }))] }))] }), document.body)] }));
+        return ((0, jsx_runtime_1.jsx)(jsx_runtime_1.Fragment, { children: open && ((0, jsx_runtime_1.jsxs)("div", { ref: hudRef, className: "usage-popup__hud", "data-usage-popup-hud": "", role: "region", "aria-label": "True-sync universal multi-chat token usage and RMB cost ledger", style: hudStyle(position, minimized, dragging, topInset), children: [(0, jsx_runtime_1.jsxs)("div", { className: "usage-popup__hud-handle", style: handleStyle(minimized, dragging), title: "Drag to move", onPointerDown: handleDragStart, onPointerMove: handleDragMove, onPointerUp: finishDrag, onPointerCancel: finishDrag, onLostPointerCapture: handleLostPointerCapture, children: [(0, jsx_runtime_1.jsx)("span", { style: gripStyle, "aria-hidden": "true", children: (0, jsx_runtime_1.jsx)(GripGlyph, {}) }), minimized ? ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("span", { style: contextBloat ? { ...pillTextStyle, ...bloatTextStyle } : pillTextStyle, title: contextBloat
+                                            ? `Runaway context: ${exactCount(displayedTotal)} tokens in this chat (over 1.5M).`
+                                            : 'Selected chat tokens', children: displayedTotal === 0 ? 'Usage —' : `Usage ${compactCount(displayedTotal)} tok` }), (0, jsx_runtime_1.jsxs)("span", { style: pillStatsStyle, title: "Ledger cost of the selected chat \u00B7 true CNY balance remaining (api.deepseek.com)", children: [yuan(liveSessionCost), " \u00B7 ", trueBalance === null ? '— left' : `${yuan(trueBalance)} left`] })] })) : ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("span", { style: titleStyle, children: "True-sync ledger" }), (0, jsx_runtime_1.jsx)("span", { style: contextBloat ? { ...headerTotalStyle, ...bloatTextStyle } : headerTotalStyle, title: contextBloat
+                                            ? `Runaway context: ${exactCount(displayedTotal)} tokens in this chat (over 1.5M).`
+                                            : `${exactCount(displayedTotal)} tokens in the selected chat`, children: displayedTotal === 0 ? '—' : `${compactCount(displayedTotal)} tok` })] })), (0, jsx_runtime_1.jsx)("button", { type: "button", "data-usage-hud-no-drag": "", "aria-label": minimized ? 'Expand the token usage HUD' : 'Minimize the token usage HUD', "aria-pressed": minimized, title: minimized ? 'Expand' : 'Minimize', onClick: toggleMinimized, style: iconButtonStyle, children: (0, jsx_runtime_1.jsx)(CollapseGlyph, { collapsed: minimized }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", "data-usage-hud-no-drag": "", "aria-label": "Close the True-sync ledger", title: "Close the ledger (reopen it from the sidebar)", onClick: closePanel, style: iconButtonStyle, children: (0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: { fontSize: 14, lineHeight: '14px' }, children: "\u00D7" }) })] }), !minimized && ((0, jsx_runtime_1.jsxs)("div", { style: bodyStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: { ...segmentGroupStyle, marginBottom: 8 }, role: "group", "aria-label": "Usage panel", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", "aria-pressed": panel === 'usage', onClick: () => setPanel('usage'), style: segmentButtonStyle(panel === 'usage'), children: "Usage" }), (0, jsx_runtime_1.jsx)("button", { type: "button", "aria-pressed": panel === 'saver', onClick: () => setPanel('saver'), style: segmentButtonStyle(panel === 'saver'), title: "dsh-plugin-save-token dashboard, merged into this HUD", children: "Token saver" })] }), panel === 'saver' ? ((0, jsx_runtime_1.jsx)(SaverPanel, {})) : ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("div", { style: timeframeGroupStyle, role: "group", "aria-label": "Usage timeframe", title: "Day, Week and Month always sum every saved chat in the global ledger. Custom also lets you include/exclude individual chats.", children: [
+                                            ['session', 'Session'],
+                                            ['day', 'Day'],
+                                            ['week', 'Week'],
+                                            ['month', 'Month'],
+                                            ['custom', 'Custom'],
+                                        ].map(([value, label]) => ((0, jsx_runtime_1.jsx)("button", { type: "button", "aria-pressed": timeframe === value, onClick: () => setTimeframe(value), style: timeframeButtonStyle(timeframe === value), children: label }, value))) }), (0, jsx_runtime_1.jsx)("div", { style: scopeRowStyle, children: isGlobalScope ? ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("span", { style: scopeBadgeStyle(true), title: "This view sums every chat in the universal ledger for the selected time range. It is not scoped to the open conversation.", children: "All chats \u00B7 global" }), (0, jsx_runtime_1.jsxs)("span", { style: countdownStyle, children: [ledgerEntries.length.toLocaleString(), " entries \u00B7 ", chatOptions.length, " chats"] })] })) : ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)(ChatSelect, { options: chatOptions, value: sessionKey, onChange: (id) => setLockedChatId(id === autoChatId ? null : id) }), manualOverride && ((0, jsx_runtime_1.jsxs)("button", { type: "button", style: currentChatPillStyle, title: "Manual history selection \u2014 click to auto-follow the current chat again.", "aria-label": "Follow the current chat again", onClick: () => setLockedChatId(null), "data-usage-hud-no-drag": "", children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: chatSelectDotStyle }), "Current chat"] })), (0, jsx_runtime_1.jsxs)("span", { style: countdownStyle, children: [sessionKey === null
+                                                            ? 'no chat selected'
+                                                            : `${selectedEntries.length.toLocaleString()} entries`, sessionKey === null ? '' : followingChat ? ' · live' : ' · history'] })] })) }), timeframe === 'custom' && ((0, jsx_runtime_1.jsxs)("div", { style: customPanelStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: customDateRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "From" }), (0, jsx_runtime_1.jsx)("input", { type: "date", "aria-label": "Custom range start", value: customStart, max: customEnd.length > 0 ? customEnd : undefined, onChange: (event) => setCustomStart(event.target.value), style: dateInputStyle }), (0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "To" }), (0, jsx_runtime_1.jsx)("input", { type: "date", "aria-label": "Custom range end", value: customEnd, min: customStart.length > 0 ? customStart : undefined, onChange: (event) => setCustomEnd(event.target.value), style: dateInputStyle })] }), (0, jsx_runtime_1.jsx)("div", { style: { ...tinyHintStyle, marginTop: 6 }, children: "Global range: every chat in the ledger is included." })] })), (0, jsx_runtime_1.jsxs)("div", { style: hudColumnsStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: leftColumnStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: totalRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: timeframe === 'session' && contextBloat
+                                                                    ? { ...totalNumberStyle, ...bloatTextStyle }
+                                                                    : totalNumberStyle, title: timeframe === 'session' && contextBloat
+                                                                    ? `Runaway context: ${exactCount(displayedTotal)} tokens in this chat (over 1.5M).`
+                                                                    : undefined, children: exactCount(displayedTotal) }), (0, jsx_runtime_1.jsx)("span", { style: totalUnitStyle, children: timeframe === 'session'
+                                                                    ? 'session tokens'
+                                                                    : `${timeframeLabel.toLowerCase()} tokens` })] }), (0, jsx_runtime_1.jsxs)("div", { style: cacheHitStyle, children: [(0, jsx_runtime_1.jsx)("span", { children: "Cache hit" }), (0, jsx_runtime_1.jsx)("span", { style: cacheHitValueStyle, children: hitRatio === null ? '—' : percent(hitRatio) })] }), (0, jsx_runtime_1.jsx)("dl", { style: detailsStyle, children: breakdown.map(([label, value]) => ((0, jsx_runtime_1.jsxs)(react_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("dt", { style: labelStyle, children: label }), (0, jsx_runtime_1.jsx)("dd", { style: valueStyle, children: exactCount(value) })] }, label))) }), (0, jsx_runtime_1.jsxs)("div", { style: metricRowStyle, title: "RMB avoided by reading cached input instead of paying the uncached input rate.", children: [(0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "Cache savings" }), (0, jsx_runtime_1.jsx)("span", { style: savingsValueStyle, children: yuan(displaySavings) })] })] }), (0, jsx_runtime_1.jsxs)("div", { style: rightColumnStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: totalRowStyle, title: primaryUsesApi
+                                                            ? 'Primary spend: the measured API balance decrease in this window (top-ups ignored).'
+                                                            : 'Ledger estimate: priced token deltas at the model and UTC peak/off-peak tier active when they arrived.', children: [(0, jsx_runtime_1.jsx)("span", { style: totalNumberStyle, children: primaryUsesApi ? yuan(primaryPeriodCost) : `≈ ${yuan(primaryPeriodCost)}` }), (0, jsx_runtime_1.jsxs)("span", { style: totalUnitStyle, children: [timeframe === 'session'
+                                                                        ? 'session cost'
+                                                                        : `${timeframeLabel.toLowerCase()} cost`, primaryUsesApi ? ` · ${primaryPeriodLabel}` : ' · ledger estimate'] })] }), (0, jsx_runtime_1.jsx)("div", { style: liveBadgeRowStyle, children: (0, jsx_runtime_1.jsxs)("span", { style: liveBadgeStyle(usedLabel === 'Mixed'), title: badgeTitle, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: tierDotStyle }), badgeText] }) }), (0, jsx_runtime_1.jsxs)("div", { style: tierRowStyle, children: [(0, jsx_runtime_1.jsxs)("span", { style: tierBadgeStyle(naturalPeak), title: naturalPeak
+                                                                    ? 'Peak window: Mon–Fri 01:00–04:00 or 06:00–10:00 UTC — peak rate card'
+                                                                    : 'Off-peak: off-peak rate card (all weekend traffic is off-peak)', children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: tierDotStyle }), naturalPeak ? 'Peak' : 'Off-Peak'] }), (0, jsx_runtime_1.jsx)("span", { style: countdownStyle, title: "Live countdown to the next natural UTC peak/off-peak rate switch", children: countdownLabel })] }), burnPerCall !== null && ((0, jsx_runtime_1.jsxs)("div", { style: metricRowStyle, title: `Derived from recorded API calls in this window (${recordedCalls.toLocaleString()} call${recordedCalls === 1 ? '' : 's'}).`, children: [(0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "Avg burn / recorded call" }), (0, jsx_runtime_1.jsx)("span", { style: metricValueStyle, children: yuan(burnPerCall) })] })), (0, jsx_runtime_1.jsxs)("div", { style: metricRowStyle, title: "Sum of the priced ledger entries in this window. Reconciliation rows are included so this can be compared with the API balance delta.", children: [(0, jsx_runtime_1.jsx)("span", { style: metricLabelStyle, children: "Ledger total" }), (0, jsx_runtime_1.jsx)("span", { style: metricValueStyle, children: yuan(ledgerPeriodSpend) })] }), reconciliationDrift !== null && Math.abs(reconciliationDrift) >= 0.005 && ((0, jsx_runtime_1.jsxs)("div", { style: tinyHintStyle, title: "Measured API balance \u0394 minus the ledger total for the same window.", children: ["API \u0394 vs ledger \u0394:", ' ', `${reconciliationDrift >= 0 ? '+' : ''}${yuan(reconciliationDrift)}`, " over", ' ', timeframeLabel.toLowerCase(), "."] }))] })] }), timeframe === 'session' && untrackedTokens > 0 && usage !== null && ((0, jsx_runtime_1.jsxs)("div", { style: tinyHintStyle, children: ["Tracking began after ~", compactCount(untrackedTokens), " earlier tokens in this chat; only tracked deltas are priced."] })), contextBloat && ((0, jsx_runtime_1.jsxs)("div", { style: { ...tinyHintStyle, ...bloatTextStyle, marginTop: 8 }, role: "status", children: ["Runaway context: ", exactCount(displayedTotal), " tokens in this chat (over 1.5M)."] })), timeframe === 'session' && routedRows !== null ? ((0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "Models \u00B7 this session" }), (0, jsx_runtime_1.jsxs)("span", { style: sectionValueStyle, children: [compactCount(routedSessionTokens), " tok"] })] }), (0, jsx_runtime_1.jsx)("div", { style: modelBarStyle, "aria-hidden": "true", children: routedRows.map((row) => ((0, jsx_runtime_1.jsx)("div", { style: modelSegmentStyle(row.color, row.share), title: `${row.label}: ${exactCount(row.tokens)} tokens` }, row.key))) }), routedRows.map((row) => ((0, jsx_runtime_1.jsxs)("div", { style: modelRowStyle, title: `${row.label} · ${exactCount(row.tokens)} tokens · ${row.calls} call${row.calls === 1 ? '' : 's'}${row.costKnown
+                                                    ? ` · ${yuan(row.costRmb)}`
+                                                    : ' · local token count (no provider sync)'}`, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: modelDotStyle(row.color) }), (0, jsx_runtime_1.jsx)("span", { style: modelNameStyle, children: row.label }), (0, jsx_runtime_1.jsxs)("span", { style: modelTokensStyle, children: [compactCount(row.tokens), " tok"] }), (0, jsx_runtime_1.jsx)("span", { style: modelCostStyle, children: row.costKnown ? yuan(row.costRmb) : 'local' }), (0, jsx_runtime_1.jsx)("span", { style: modelShareStyle, children: percent(row.share) })] }, row.key))), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Local route counts from the tier router. DeepSeek rows are priced; other models stay tokens-only and are never synced against a provider API." })] })) : ((0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "Cost by model" }), (0, jsx_runtime_1.jsx)("span", { style: sectionValueStyle, children: yuan(trueSelectedCost) })] }), (0, jsx_runtime_1.jsx)("div", { style: modelBarStyle, "aria-hidden": "true", children: modelRows.map((row) => ((0, jsx_runtime_1.jsx)("div", { style: modelSegmentStyle(row.color, row.share), title: `${row.label}: ${yuan(row.costRmb)}` }, row.id))) }), modelRows.map((row) => ((0, jsx_runtime_1.jsxs)("div", { style: modelRowStyle, title: row.id === 'search'
+                                                    ? 'server-tool-search charges. Recorded only when the host ledger carries such entries; otherwise ¥0.00.'
+                                                    : `${row.label} · ${exactCount(row.tokens)} tokens · ${yuan(row.costRmb)}`, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: modelDotStyle(row.color) }), (0, jsx_runtime_1.jsx)("span", { style: modelNameStyle, children: row.label }), (0, jsx_runtime_1.jsx)("span", { style: modelTokensStyle, children: row.tokens === 0 ? '—' : `${compactCount(row.tokens)} tok` }), (0, jsx_runtime_1.jsx)("span", { style: modelCostStyle, children: yuan(row.costRmb) }), (0, jsx_runtime_1.jsx)("span", { style: modelShareStyle, children: row.costRmb <= 0 ? '0%' : percent(row.share) })] }, row.id)))] })), delegatedSummary.entries > 0 && ((0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "Subagents & background" }), (0, jsx_runtime_1.jsx)("span", { style: sectionValueStyle, children: delegatedSummary.tokens === 0
+                                                            ? '—'
+                                                            : `${compactCount(delegatedSummary.tokens)} tok` })] }), (0, jsx_runtime_1.jsxs)("div", { style: modelRowStyle, title: `${delegatedSummary.entries.toLocaleString()} recorded subagent/background/compaction ${delegatedSummary.entries === 1 ? 'entry' : 'entries'} · ${delegatedSummary.calls.toLocaleString()} call${delegatedSummary.calls === 1 ? '' : 's'}`, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: modelDotStyle(MODEL_COLORS.unattributed) }), (0, jsx_runtime_1.jsx)("span", { style: modelNameStyle, children: "Delegated & background" }), (0, jsx_runtime_1.jsx)("span", { style: modelTokensStyle, children: delegatedSummary.tokens === 0
+                                                            ? '—'
+                                                            : `${compactCount(delegatedSummary.tokens)} tok` }), (0, jsx_runtime_1.jsx)("span", { style: modelCostStyle, children: yuan(delegatedSummary.costRmb) }), (0, jsx_runtime_1.jsx)("span", { style: modelShareStyle, children: `${delegatedSummary.calls}×` })] }), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Calls recorded by the host collector outside the main chat thread. Their cost is included in the totals above." })] })), timeframe === 'session' && workerRows.length > 0 && ((0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "Fetch boys \u00B7 this run" }), (0, jsx_runtime_1.jsxs)("span", { style: sectionValueStyle, children: [compactCount(workerTokens), " tok"] })] }), workerRows.map((row) => ((0, jsx_runtime_1.jsxs)("div", { style: modelRowStyle, title: `${row.label} · ${exactCount(row.tokens)} tokens · ${row.calls} call${row.calls === 1 ? '' : 's'} · delegated session, local count only`, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: modelDotStyle(row.color) }), (0, jsx_runtime_1.jsx)("span", { style: modelNameStyle, children: row.label }), (0, jsx_runtime_1.jsxs)("span", { style: modelTokensStyle, children: [compactCount(row.tokens), " tok"] }), (0, jsx_runtime_1.jsx)("span", { style: modelCostStyle, children: "local" }), (0, jsx_runtime_1.jsxs)("span", { style: modelShareStyle, children: [row.calls, "\u00D7"] })] }, row.key))), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Delegated subagent sessions since the router last started. Tokens only \u2014 no provider sync." })] })), (0, jsx_runtime_1.jsxs)("div", { style: sectionStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: sectionTitleRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: sectionTitleStyle, children: "True balance" }), (0, jsx_runtime_1.jsxs)("span", { style: syncStatusStyle, title: "Automatic sync from api.deepseek.com/user/balance", children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", style: syncDotStyle(syncStatusColor) }), syncStatusLabel] }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setKeyEditorOpen((current) => !current), style: { ...linkButtonStyle, marginLeft: 'auto' }, title: "Add, replace or forget the saved DeepSeek API key", children: apiKey.length > 0 ? 'API key' : 'Add key' })] }), (0, jsx_runtime_1.jsxs)("div", { style: balanceHeadlineRowStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: {
+                                                            ...balanceHeadlineStyle,
+                                                            ...(trueBalance !== null && trueBalance <= 0 ? dangerTextStyle : {}),
+                                                        }, children: trueBalance === null ? '—' : yuan(trueBalance) }), (0, jsx_runtime_1.jsx)("span", { style: balanceHeadlineUnitStyle, children: "CNY \u00B7 source of truth" })] }), (0, jsx_runtime_1.jsxs)("div", { style: balanceGridStyle, children: [(0, jsx_runtime_1.jsxs)("div", { style: balanceMetricStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: balanceMetricLabelStyle, children: "Runway" }), (0, jsx_runtime_1.jsx)("span", { style: balanceMetricValueStyle, children: runwayLabel })] }), (0, jsx_runtime_1.jsxs)("div", { style: balanceMetricStyle, children: [(0, jsx_runtime_1.jsxs)("span", { style: balanceMetricLabelStyle, title: todayApiSpend !== null
+                                                                    ? 'API balance decrease since local midnight (top-ups ignored)'
+                                                                    : 'Ledger spend since local midnight', children: ["Today \u00B7 ", todayApiSpend !== null ? 'API Δ' : 'ledger'] }), (0, jsx_runtime_1.jsx)("span", { style: balanceMetricValueStyle, children: todayApiSpend !== null ? yuan(todayApiSpend) : `≈ ${yuan(todayDisplaySpend)}` })] }), (0, jsx_runtime_1.jsxs)("div", { style: balanceMetricStyle, children: [(0, jsx_runtime_1.jsx)("span", { style: balanceMetricLabelStyle, title: "API balance decrease inside the selected window (top-ups ignored)", children: "True period spend" }), (0, jsx_runtime_1.jsx)("span", { style: balanceMetricValueStyle, title: periodSpendIsEstimate
+                                                                    ? 'Not enough /user/balance samples in this window yet; showing the local ledger estimate.'
+                                                                    : `Measured from ${balanceHistory.length} /user/balance samples.`, children: periodSpendLabel })] })] }), (0, jsx_runtime_1.jsxs)("div", { style: budgetRowStyle, children: [(0, jsx_runtime_1.jsxs)("label", { style: stopLabelStyle, title: "Target number of days the true balance should last", children: ["Target runway", (0, jsx_runtime_1.jsx)("input", { type: "number", min: 1, max: MAX_TARGET_RUNWAY_DAYS, step: 1, value: runwayDraft, onChange: (event) => setRunwayDraft(event.target.value), onBlur: () => setRunwayDraft(String(targetRunwayDays)), style: stopInputStyle }), "d"] }), (0, jsx_runtime_1.jsxs)("span", { style: dailyTargetStyle, title: "True API balance \u00F7 target runway", children: ["Daily target ", dailyTargetBudget === null ? '—' : yuan(dailyTargetBudget)] })] }), (0, jsx_runtime_1.jsx)("div", { style: gaugeTrackStyle, role: "progressbar", "aria-label": "Today's spend versus the daily target budget", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": budgetRatio === null ? 0 : Math.round(Math.min(1, budgetRatio) * 100), title: "Today's true tracked spend versus the balance-derived daily target budget.", children: (0, jsx_runtime_1.jsx)("div", { style: gaugeFillStyle(budgetRatio) }) }), (0, jsx_runtime_1.jsxs)("div", { style: budgetCaptionRowStyle, children: [(0, jsx_runtime_1.jsxs)("span", { children: ["Today ", yuan(todayDisplaySpend), " / ", dailyTargetBudget === null ? '—' : yuan(dailyTargetBudget), todayApiSpend !== null ? ' · API Δ' : ' · ledger'] }), (0, jsx_runtime_1.jsx)("span", { style: budgetRatio !== null && budgetRatio >= 1
+                                                            ? dangerTextStyle
+                                                            : budgetRatio !== null && budgetRatio >= 0.8
+                                                                ? warnTextStyle
+                                                                : undefined, children: budgetPercentLabel })] }), (keyEditorOpen || apiKey.length === 0) && ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsxs)("div", { style: syncRowStyle, children: [(0, jsx_runtime_1.jsx)("input", { type: "password", autoComplete: "off", spellCheck: false, "aria-label": "DeepSeek API key", placeholder: apiKey.length > 0 ? 'Replace API key' : 'sk-…', value: apiKeyDraft, onChange: (event) => setApiKeyDraft(event.target.value), onKeyDown: (event) => {
+                                                                    if (event.key === 'Enter')
+                                                                        saveApiKey();
+                                                                }, style: passwordInputStyle }), (0, jsx_runtime_1.jsx)("button", { type: "button", disabled: apiKeyDraft.trim().length === 0, onClick: saveApiKey, style: {
+                                                                    ...primaryMiniButtonStyle,
+                                                                    opacity: apiKeyDraft.trim().length === 0 ? 0.55 : 1,
+                                                                }, children: "Save key" }), apiKey.length > 0 && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => {
+                                                                    setKeyEditorOpen(false);
+                                                                    setApiKeyDraft('');
+                                                                    setSyncError(null);
+                                                                }, style: miniButtonStyle, children: "Cancel" }))] }), apiKey.length > 0 && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: forgetApiKey, style: { ...linkButtonStyle, marginTop: 4 }, children: "Forget saved key" })), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: "Stored only in this browser's localStorage, base64-encoded, never included in JSON exports. The balance is fetched automatically every 5 minutes." })] })), syncError !== null && ((0, jsx_runtime_1.jsx)("div", { style: { ...tinyHintStyle, ...dangerTextStyle }, children: syncError })), syncNotice !== null && syncError === null && ((0, jsx_runtime_1.jsx)("div", { style: { ...tinyHintStyle, color: 'var(--dsw-alias-state-success-primary, #3fb950)' }, children: syncNotice })), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: apiKey.length === 0
+                                                    ? 'Add a DeepSeek API key to auto-sync the true CNY balance.'
+                                                    : balanceMeta === null
+                                                        ? 'Auto-sync runs on load and every 5 minutes.'
+                                                        : `Last sync ${new Date(balanceMeta.syncedAt).toLocaleString()} · ledger spend since sync ${yuan(postSyncSpend)}.` })] }), (0, jsx_runtime_1.jsxs)("div", { style: footerStyle, children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: exportLedger, style: miniButtonStyle, title: "Download the universal ledger as JSON", children: "Export" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => fileInputRef.current?.click(), style: miniButtonStyle, title: "Merge a universal ledger JSON export or a DeepSeek dashboard CSV / TSV / JSON export", children: "Import" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: resetLogs, style: miniButtonStyle, title: "Clear all local usage logs", children: "Reset" }), (0, jsx_runtime_1.jsxs)("span", { style: { ...sessionCountStyle, marginLeft: 'auto' }, children: [ledgerEntries.length.toLocaleString(), " entries \u00B7 ", chatOptions.length, " chats"] }), (0, jsx_runtime_1.jsx)("input", { ref: fileInputRef, type: "file", accept: ".json,.csv,.tsv,application/json,text/csv,text/tab-separated-values", onChange: (event) => void importLedger(event), style: { display: 'none' } })] }), (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: timeframe === 'custom'
+                                            ? `${customDays} day${customDays === 1 ? '' : 's'} · ${elapsedDays.toFixed(1)}d elapsed · ${balanceHistory.length} API balance samples`
+                                            : `${timeframeLabel} · ${balanceHistory.length} API balance samples · avg burn ${yuan(averageDailySpend)}/day` }), dataMessage !== null && (0, jsx_runtime_1.jsx)("div", { style: tinyHintStyle, children: dataMessage }), usage === null && displayedTotal === 0 && ((0, jsx_runtime_1.jsx)("p", { style: hintStyle, children: "No session data yet." }))] }))] }))] })) }));
     }
     return module.exports;
   },

@@ -1,6 +1,6 @@
 {
   "name": "usage-popup",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Composer token-usage popup for DeepSeek Harness",
   "private": true,
   "type": "module",
@@ -28,8 +28,12 @@
     },
     "client": {
       "platform": "web",
+      "immediately": true,
       "inject": [
         "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-renderer"
       ]
     }
