@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "root": "C:\\Users\\Administrator\\Documents\\deepseek-harness\\default-workspace",
-  "generatedAt": 1795036254349,
+  "generatedAt": 1795149645194,
   "files": [
     {
       "path": ".dsh-work/analysis/dump-events.mjs",
@@ -293699,7 +293699,7 @@
     {
       "path": "plugins/usage-popup/test/.build/host.js",
       "lang": "javascript",
-      "mtimeMs": 1795036162869.126,
+      "mtimeMs": 1795149456959.3384,
       "symbols": [
         {
           "name": "name",
@@ -294055,7 +294055,7 @@
     {
       "path": "plugins/usage-popup/test/.build/host/collector.js",
       "lang": "javascript",
-      "mtimeMs": 1795036162918.5781,
+      "mtimeMs": 1795149456987.3052,
       "symbols": [
         {
           "name": "SERVER_TOOL_NAMES",
@@ -295085,7 +295085,7 @@
     {
       "path": "plugins/usage-popup/test/.build/host/route.js",
       "lang": "javascript",
-      "mtimeMs": 1795036162936.6748,
+      "mtimeMs": 1795149457005.2441,
       "symbols": [
         {
           "name": "ROUTE_PREFIX",
@@ -295395,7 +295395,7 @@
     {
       "path": "plugins/usage-popup/test/.build/host/store.js",
       "lang": "javascript",
-      "mtimeMs": 1795036162957.3083,
+      "mtimeMs": 1795149457019.092,
       "symbols": [
         {
           "name": "FORMAT",
@@ -296027,7 +296027,7 @@
     {
       "path": "plugins/usage-popup/test/.build/host/transport.js",
       "lang": "javascript",
-      "mtimeMs": 1795036162989.6995,
+      "mtimeMs": 1795149457044.8877,
       "symbols": [
         {
           "name": "MAX_PARSE_BYTES",
@@ -297229,7 +297229,7 @@
     {
       "path": "plugins/usage-popup/test/client.test.mjs",
       "lang": "javascript",
-      "mtimeMs": 1795035373529.4458,
+      "mtimeMs": 1795149579929.572,
       "symbols": [
         {
           "name": "require",
@@ -297268,22 +297268,22 @@
           "ordinal": 1
         },
         {
-          "name": "tsEntry",
+          "name": "tsCandidates",
           "kind": "variable",
           "line": 15,
-          "endLine": 15,
+          "endLine": 18,
           "exported": false,
-          "signature": "tsEntry",
+          "signature": "tsCandidates",
           "file": "plugins/usage-popup/test/client.test.mjs",
-          "id": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:tsEntry@1",
+          "id": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:tsCandidates@1",
           "scope": [],
           "ordinal": 1
         },
         {
           "name": "ts",
           "kind": "variable",
-          "line": 17,
-          "endLine": 17,
+          "line": 20,
+          "endLine": 20,
           "exported": false,
           "signature": "ts",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297294,8 +297294,8 @@
         {
           "name": "sourcePath",
           "kind": "variable",
-          "line": 25,
-          "endLine": 25,
+          "line": 34,
+          "endLine": 34,
           "exported": false,
           "signature": "sourcePath",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297306,8 +297306,8 @@
         {
           "name": "source",
           "kind": "variable",
-          "line": 26,
-          "endLine": 26,
+          "line": 35,
+          "endLine": 35,
           "exported": false,
           "signature": "source",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297318,8 +297318,8 @@
         {
           "name": "js",
           "kind": "variable",
-          "line": 27,
-          "endLine": 34,
+          "line": 36,
+          "endLine": 43,
           "exported": false,
           "signature": "js",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297330,8 +297330,8 @@
         {
           "name": "store",
           "kind": "variable",
-          "line": 36,
-          "endLine": 36,
+          "line": 45,
+          "endLine": 45,
           "exported": false,
           "signature": "store",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297342,8 +297342,8 @@
         {
           "name": "localStorageStub",
           "kind": "variable",
-          "line": 37,
-          "endLine": 56,
+          "line": 46,
+          "endLine": 65,
           "exported": false,
           "signature": "localStorageStub",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297354,8 +297354,8 @@
         {
           "name": "length",
           "kind": "method",
-          "line": 38,
-          "endLine": 40,
+          "line": 47,
+          "endLine": 49,
           "exported": false,
           "signature": "length()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297372,8 +297372,8 @@
         {
           "name": "key",
           "kind": "method",
-          "line": 41,
-          "endLine": 43,
+          "line": 50,
+          "endLine": 52,
           "exported": false,
           "signature": "key(index)",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297390,8 +297390,8 @@
         {
           "name": "getItem",
           "kind": "method",
-          "line": 44,
-          "endLine": 46,
+          "line": 53,
+          "endLine": 55,
           "exported": false,
           "signature": "getItem(key)",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297408,8 +297408,8 @@
         {
           "name": "setItem",
           "kind": "method",
-          "line": 47,
-          "endLine": 49,
+          "line": 56,
+          "endLine": 58,
           "exported": false,
           "signature": "setItem(key, value)",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297426,8 +297426,8 @@
         {
           "name": "removeItem",
           "kind": "method",
-          "line": 50,
-          "endLine": 52,
+          "line": 59,
+          "endLine": 61,
           "exported": false,
           "signature": "removeItem(key)",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297444,8 +297444,8 @@
         {
           "name": "clear",
           "kind": "method",
-          "line": 53,
-          "endLine": 55,
+          "line": 62,
+          "endLine": 64,
           "exported": false,
           "signature": "clear()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297462,8 +297462,8 @@
         {
           "name": "windowStub",
           "kind": "variable",
-          "line": 58,
-          "endLine": 75,
+          "line": 67,
+          "endLine": 84,
           "exported": false,
           "signature": "windowStub",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297474,8 +297474,8 @@
         {
           "name": "addEventListener",
           "kind": "method",
-          "line": 62,
-          "endLine": 62,
+          "line": 71,
+          "endLine": 71,
           "exported": false,
           "signature": "addEventListener()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297492,8 +297492,8 @@
         {
           "name": "removeEventListener",
           "kind": "method",
-          "line": 63,
-          "endLine": 63,
+          "line": 72,
+          "endLine": 72,
           "exported": false,
           "signature": "removeEventListener()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297510,8 +297510,8 @@
         {
           "name": "dispatchEvent",
           "kind": "method",
-          "line": 64,
-          "endLine": 64,
+          "line": 73,
+          "endLine": 73,
           "exported": false,
           "signature": "dispatchEvent()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297528,8 +297528,8 @@
         {
           "name": "cancelAnimationFrame",
           "kind": "method",
-          "line": 70,
-          "endLine": 70,
+          "line": 79,
+          "endLine": 79,
           "exported": false,
           "signature": "cancelAnimationFrame()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297546,8 +297546,8 @@
         {
           "name": "documentStub",
           "kind": "variable",
-          "line": 77,
-          "endLine": 85,
+          "line": 86,
+          "endLine": 94,
           "exported": false,
           "signature": "documentStub",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297558,8 +297558,8 @@
         {
           "name": "addEventListener",
           "kind": "method",
-          "line": 82,
-          "endLine": 82,
+          "line": 91,
+          "endLine": 91,
           "exported": false,
           "signature": "addEventListener()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297576,8 +297576,8 @@
         {
           "name": "removeEventListener",
           "kind": "method",
-          "line": 83,
-          "endLine": 83,
+          "line": 92,
+          "endLine": 92,
           "exported": false,
           "signature": "removeEventListener()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297594,8 +297594,8 @@
         {
           "name": "BroadcastChannelStub",
           "kind": "class",
-          "line": 87,
-          "endLine": 92,
+          "line": 96,
+          "endLine": 101,
           "exported": false,
           "signature": "BroadcastChannelStub",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297606,8 +297606,8 @@
         {
           "name": "postMessage",
           "kind": "method",
-          "line": 88,
-          "endLine": 88,
+          "line": 97,
+          "endLine": 97,
           "exported": false,
           "signature": "postMessage()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297624,8 +297624,8 @@
         {
           "name": "addEventListener",
           "kind": "method",
-          "line": 89,
-          "endLine": 89,
+          "line": 98,
+          "endLine": 98,
           "exported": false,
           "signature": "addEventListener()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297642,8 +297642,8 @@
         {
           "name": "removeEventListener",
           "kind": "method",
-          "line": 90,
-          "endLine": 90,
+          "line": 99,
+          "endLine": 99,
           "exported": false,
           "signature": "removeEventListener()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297660,8 +297660,8 @@
         {
           "name": "close",
           "kind": "method",
-          "line": 91,
-          "endLine": 91,
+          "line": 100,
+          "endLine": 100,
           "exported": false,
           "signature": "close()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297678,8 +297678,8 @@
         {
           "name": "reactStub",
           "kind": "variable",
-          "line": 94,
-          "endLine": 102,
+          "line": 103,
+          "endLine": 111,
           "exported": false,
           "signature": "reactStub",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297690,8 +297690,8 @@
         {
           "name": "useEffect",
           "kind": "method",
-          "line": 97,
-          "endLine": 97,
+          "line": 106,
+          "endLine": 106,
           "exported": false,
           "signature": "useEffect()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297708,8 +297708,8 @@
         {
           "name": "useLayoutEffect",
           "kind": "method",
-          "line": 98,
-          "endLine": 98,
+          "line": 107,
+          "endLine": 107,
           "exported": false,
           "signature": "useLayoutEffect()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297726,8 +297726,8 @@
         {
           "name": "jsxRuntimeStub",
           "kind": "variable",
-          "line": 103,
-          "endLine": 108,
+          "line": 112,
+          "endLine": 117,
           "exported": false,
           "signature": "jsxRuntimeStub",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297738,8 +297738,8 @@
         {
           "name": "reactDomStub",
           "kind": "variable",
-          "line": 109,
-          "endLine": 109,
+          "line": 118,
+          "endLine": 118,
           "exported": false,
           "signature": "reactDomStub",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297750,8 +297750,8 @@
         {
           "name": "stubRequire",
           "kind": "variable",
-          "line": 110,
-          "endLine": 115,
+          "line": 119,
+          "endLine": 124,
           "exported": false,
           "signature": "stubRequire",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297762,8 +297762,8 @@
         {
           "name": "moduleRecord",
           "kind": "variable",
-          "line": 117,
-          "endLine": 117,
+          "line": 126,
+          "endLine": 126,
           "exported": false,
           "signature": "moduleRecord",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297774,8 +297774,8 @@
         {
           "name": "evaluate",
           "kind": "variable",
-          "line": 118,
-          "endLine": 129,
+          "line": 127,
+          "endLine": 138,
           "exported": false,
           "signature": "evaluate",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297786,8 +297786,8 @@
         {
           "name": "plugin",
           "kind": "variable",
-          "line": 141,
-          "endLine": 141,
+          "line": 150,
+          "endLine": 150,
           "exported": false,
           "signature": "plugin",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297798,8 +297798,8 @@
         {
           "name": "pass",
           "kind": "variable",
-          "line": 143,
-          "endLine": 143,
+          "line": 152,
+          "endLine": 152,
           "exported": false,
           "signature": "pass",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297810,8 +297810,8 @@
         {
           "name": "fail",
           "kind": "variable",
-          "line": 144,
-          "endLine": 144,
+          "line": 153,
+          "endLine": 153,
           "exported": false,
           "signature": "fail",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297822,8 +297822,8 @@
         {
           "name": "check",
           "kind": "variable",
-          "line": 145,
-          "endLine": 152,
+          "line": 154,
+          "endLine": 161,
           "exported": false,
           "signature": "check",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297834,8 +297834,8 @@
         {
           "name": "registrations",
           "kind": "variable",
-          "line": 155,
-          "endLine": 155,
+          "line": 164,
+          "endLine": 164,
           "exported": false,
           "signature": "registrations",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297846,8 +297846,8 @@
         {
           "name": "ctx",
           "kind": "variable",
-          "line": 156,
-          "endLine": 170,
+          "line": 165,
+          "endLine": 179,
           "exported": false,
           "signature": "ctx",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297858,8 +297858,8 @@
         {
           "name": "inject",
           "kind": "method",
-          "line": 158,
-          "endLine": 160,
+          "line": 167,
+          "endLine": 169,
           "exported": false,
           "signature": "inject(_name, callback)",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297876,8 +297876,8 @@
         {
           "name": "register",
           "kind": "method",
-          "line": 161,
-          "endLine": 164,
+          "line": 170,
+          "endLine": 173,
           "exported": false,
           "signature": "register(options, component)",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297894,8 +297894,8 @@
         {
           "name": "get",
           "kind": "method",
-          "line": 166,
-          "endLine": 168,
+          "line": 175,
+          "endLine": 177,
           "exported": false,
           "signature": "get()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297912,8 +297912,8 @@
         {
           "name": "warn",
           "kind": "method",
-          "line": 169,
-          "endLine": 169,
+          "line": 178,
+          "endLine": 178,
           "exported": false,
           "signature": "warn()",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297930,8 +297930,8 @@
         {
           "name": "overlay",
           "kind": "variable",
-          "line": 173,
-          "endLine": 173,
+          "line": 182,
+          "endLine": 182,
           "exported": false,
           "signature": "overlay",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297942,8 +297942,8 @@
         {
           "name": "sidebar",
           "kind": "variable",
-          "line": 178,
-          "endLine": 178,
+          "line": 187,
+          "endLine": 187,
           "exported": false,
           "signature": "sidebar",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297954,8 +297954,8 @@
         {
           "name": "dock",
           "kind": "variable",
-          "line": 188,
-          "endLine": 188,
+          "line": 197,
+          "endLine": 197,
           "exported": false,
           "signature": "dock",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297966,8 +297966,8 @@
         {
           "name": "row",
           "kind": "variable",
-          "line": 198,
-          "endLine": 210,
+          "line": 207,
+          "endLine": 219,
           "exported": false,
           "signature": "row",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297978,8 +297978,8 @@
         {
           "name": "ledger",
           "kind": "variable",
-          "line": 211,
-          "endLine": 211,
+          "line": 220,
+          "endLine": 220,
           "exported": false,
           "signature": "ledger",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -297990,8 +297990,8 @@
         {
           "name": "options",
           "kind": "variable",
-          "line": 213,
-          "endLine": 213,
+          "line": 222,
+          "endLine": 222,
           "exported": false,
           "signature": "options",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -298002,8 +298002,8 @@
         {
           "name": "firstTurn",
           "kind": "variable",
-          "line": 223,
-          "endLine": 223,
+          "line": 232,
+          "endLine": 232,
           "exported": false,
           "signature": "firstTurn",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -298014,8 +298014,8 @@
         {
           "name": "liveExisting",
           "kind": "variable",
-          "line": 228,
-          "endLine": 228,
+          "line": 237,
+          "endLine": 237,
           "exported": false,
           "signature": "liveExisting",
           "file": "plugins/usage-popup/test/client.test.mjs",
@@ -298111,184 +298111,184 @@
         },
         {
           "name": "join",
-          "line": 15,
+          "line": 16,
+          "from": "",
+          "fromId": null,
+          "qualifier": "path"
+        },
+        {
+          "name": "join",
+          "line": 17,
           "from": "",
           "fromId": null,
           "qualifier": "path"
         },
         {
           "name": "require",
-          "line": 19,
+          "line": 23,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "error",
-          "line": 21,
+          "line": 30,
           "from": "",
           "fromId": null,
           "qualifier": "console"
         },
         {
+          "name": "join",
+          "line": 30,
+          "from": "",
+          "fromId": null,
+          "qualifier": "tsCandidates.map((candidate) => ` ${candidate}`)"
+        },
+        {
+          "name": "map",
+          "line": 30,
+          "from": "",
+          "fromId": null,
+          "qualifier": "tsCandidates"
+        },
+        {
           "name": "exit",
-          "line": 22,
+          "line": 31,
           "from": "",
           "fromId": null,
           "qualifier": "process"
         },
         {
           "name": "join",
-          "line": 25,
+          "line": 34,
           "from": "",
           "fromId": null,
           "qualifier": "path"
         },
         {
           "name": "readFileSync",
-          "line": 26,
+          "line": 35,
           "from": "",
           "fromId": null,
           "qualifier": "fs"
         },
         {
           "name": "transpileModule",
-          "line": 27,
+          "line": 36,
           "from": "",
           "fromId": null,
           "qualifier": "ts"
         },
         {
           "name": "Map",
-          "line": 36,
+          "line": 45,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "from",
-          "line": 42,
+          "line": 51,
           "from": "key",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:localStorageStub@1/method:key@1",
           "qualifier": "Array"
         },
         {
           "name": "keys",
-          "line": 42,
+          "line": 51,
           "from": "key",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:localStorageStub@1/method:key@1",
           "qualifier": "store"
         },
         {
           "name": "get",
-          "line": 45,
+          "line": 54,
           "from": "getItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:localStorageStub@1/method:getItem@1",
           "qualifier": "store"
         },
         {
           "name": "has",
-          "line": 45,
+          "line": 54,
           "from": "getItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:localStorageStub@1/method:getItem@1",
           "qualifier": "store"
         },
         {
           "name": "set",
-          "line": 48,
+          "line": 57,
           "from": "setItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:localStorageStub@1/method:setItem@1",
           "qualifier": "store"
         },
         {
           "name": "String",
-          "line": 48,
+          "line": 57,
           "from": "setItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:localStorageStub@1/method:setItem@1",
           "qualifier": null
         },
         {
           "name": "delete",
-          "line": 51,
+          "line": 60,
           "from": "removeItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:localStorageStub@1/method:removeItem@1",
           "qualifier": "store"
         },
         {
           "name": "clear",
-          "line": 54,
+          "line": 63,
           "from": "clear",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:localStorageStub@1/method:clear@1",
           "qualifier": "store"
         },
         {
           "name": "from",
-          "line": 60,
+          "line": 69,
           "from": "",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
           "qualifier": "Buffer"
         },
         {
           "name": "String",
-          "line": 60,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
-          "qualifier": null
-        },
-        {
-          "name": "toString",
-          "line": 60,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
-          "qualifier": "Buffer.from(String(value), 'binary')"
-        },
-        {
-          "name": "from",
-          "line": 61,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
-          "qualifier": "Buffer"
-        },
-        {
-          "name": "String",
-          "line": 61,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
-          "qualifier": null
-        },
-        {
-          "name": "toString",
-          "line": 61,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
-          "qualifier": "Buffer.from(String(value), 'base64')"
-        },
-        {
-          "name": "setTimeout",
           "line": 69,
           "from": "",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
           "qualifier": null
         },
         {
-          "name": "Symbol",
-          "line": 95,
+          "name": "toString",
+          "line": 69,
           "from": "",
-          "fromId": null,
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
+          "qualifier": "Buffer.from(String(value), 'binary')"
+        },
+        {
+          "name": "from",
+          "line": 70,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
+          "qualifier": "Buffer"
+        },
+        {
+          "name": "String",
+          "line": 70,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
           "qualifier": null
         },
         {
-          "name": "factory",
-          "line": 99,
+          "name": "toString",
+          "line": 70,
           "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:reactStub@1",
-          "qualifier": null
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
+          "qualifier": "Buffer.from(String(value), 'base64')"
         },
         {
-          "name": "value",
-          "line": 101,
+          "name": "setTimeout",
+          "line": 78,
           "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:reactStub@1",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:windowStub@1",
           "qualifier": null
         },
         {
@@ -298299,144 +298299,130 @@
           "qualifier": null
         },
         {
+          "name": "factory",
+          "line": 108,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:reactStub@1",
+          "qualifier": null
+        },
+        {
+          "name": "value",
+          "line": 110,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:reactStub@1",
+          "qualifier": null
+        },
+        {
+          "name": "Symbol",
+          "line": 113,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
           "name": "Error",
-          "line": 114,
+          "line": 123,
           "from": "stubRequire",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:stubRequire@1",
           "qualifier": null
         },
         {
           "name": "Function",
-          "line": 118,
+          "line": 127,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "evaluate",
-          "line": 130,
+          "line": 139,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "Error",
-          "line": 138,
+          "line": 147,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "reject",
-          "line": 138,
+          "line": 147,
           "from": "",
           "fromId": null,
           "qualifier": "Promise"
         },
         {
           "name": "log",
-          "line": 150,
+          "line": 159,
           "from": "check",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:check@1",
           "qualifier": "console"
         },
         {
           "name": "callback",
-          "line": 159,
+          "line": 168,
           "from": "inject",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:ctx@1/method:inject@1",
           "qualifier": null
         },
         {
           "name": "push",
-          "line": 162,
+          "line": 171,
           "from": "register",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Fclient.test.mjs#owner:ctx@1/method:register@1",
           "qualifier": "registrations"
         },
         {
           "name": "apply",
-          "line": 171,
+          "line": 180,
           "from": "",
           "fromId": null,
           "qualifier": "plugin"
         },
         {
           "name": "find",
-          "line": 173,
-          "from": "",
-          "fromId": null,
-          "qualifier": "registrations"
-        },
-        {
-          "name": "check",
-          "line": 174,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 175,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 176,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "filter",
-          "line": 178,
-          "from": "",
-          "fromId": null,
-          "qualifier": "registrations"
-        },
-        {
-          "name": "check",
-          "line": 179,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 180,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 181,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
           "line": 182,
           "from": "",
           "fromId": null,
+          "qualifier": "registrations"
+        },
+        {
+          "name": "check",
+          "line": 183,
+          "from": "",
+          "fromId": null,
           "qualifier": null
         },
         {
-          "name": "label",
+          "name": "check",
           "line": 184,
           "from": "",
           "fromId": null,
-          "qualifier": "sidebar[0].options"
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 185,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
         },
         {
           "name": "filter",
-          "line": 188,
+          "line": 187,
           "from": "",
           "fromId": null,
           "qualifier": "registrations"
+        },
+        {
+          "name": "check",
+          "line": 188,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
         },
         {
           "name": "check",
@@ -298460,102 +298446,81 @@
           "qualifier": null
         },
         {
+          "name": "label",
+          "line": 193,
+          "from": "",
+          "fromId": null,
+          "qualifier": "sidebar[0].options"
+        },
+        {
+          "name": "filter",
+          "line": 197,
+          "from": "",
+          "fromId": null,
+          "qualifier": "registrations"
+        },
+        {
+          "name": "check",
+          "line": 198,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 199,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 200,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
           "name": "component",
-          "line": 191,
+          "line": 200,
           "from": "",
           "fromId": null,
           "qualifier": "dock[0]"
         },
         {
           "name": "check",
-          "line": 192,
+          "line": 201,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "every",
-          "line": 193,
+          "line": 202,
           "from": "",
           "fromId": null,
           "qualifier": "registrations"
         },
         {
           "name": "row",
-          "line": 211,
+          "line": 220,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "buildChatOptions",
-          "line": 213,
+          "line": 222,
           "from": "",
           "fromId": null,
           "qualifier": "plugin"
         },
         {
           "name": "check",
-          "line": 214,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 215,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 216,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 217,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 218,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 219,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "buildChatOptions",
-          "line": 221,
-          "from": "",
-          "fromId": null,
-          "qualifier": "plugin"
-        },
-        {
-          "name": "check",
-          "line": 221,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "buildChatOptions",
           "line": 223,
           "from": "",
           "fromId": null,
-          "qualifier": "plugin"
+          "qualifier": null
         },
         {
           "name": "check",
@@ -298579,50 +298544,106 @@
           "qualifier": null
         },
         {
-          "name": "buildChatOptions",
+          "name": "check",
+          "line": 227,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
           "line": 228,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "buildChatOptions",
+          "line": 230,
           "from": "",
           "fromId": null,
           "qualifier": "plugin"
         },
         {
           "name": "check",
-          "line": 229,
+          "line": 230,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "buildChatOptions",
+          "line": 232,
+          "from": "",
+          "fromId": null,
+          "qualifier": "plugin"
+        },
+        {
+          "name": "check",
+          "line": 233,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 234,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 235,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "buildChatOptions",
+          "line": 237,
+          "from": "",
+          "fromId": null,
+          "qualifier": "plugin"
+        },
+        {
+          "name": "check",
+          "line": 238,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "find",
-          "line": 230,
+          "line": 239,
           "from": "",
           "fromId": null,
           "qualifier": "liveExisting"
         },
         {
           "name": "buildChatOptions",
-          "line": 233,
+          "line": 242,
           "from": "",
           "fromId": null,
           "qualifier": "plugin"
         },
         {
           "name": "check",
-          "line": 233,
+          "line": 242,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "log",
-          "line": 235,
+          "line": 244,
           "from": "",
           "fromId": null,
           "qualifier": "console"
         },
         {
           "name": "exit",
-          "line": 236,
+          "line": 245,
           "from": "",
           "fromId": null,
           "qualifier": "process"
@@ -302968,7 +302989,7 @@
     {
       "path": "plugins/usage-popup/test/logic.test.mjs",
       "lang": "javascript",
-      "mtimeMs": 1794692207814.1094,
+      "mtimeMs": 1795149579850.5027,
       "symbols": [
         {
           "name": "require",
@@ -303007,22 +303028,22 @@
           "ordinal": 1
         },
         {
-          "name": "tsEntry",
+          "name": "tsCandidates",
           "kind": "variable",
           "line": 14,
-          "endLine": 14,
+          "endLine": 17,
           "exported": false,
-          "signature": "tsEntry",
+          "signature": "tsCandidates",
           "file": "plugins/usage-popup/test/logic.test.mjs",
-          "id": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:tsEntry@1",
+          "id": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:tsCandidates@1",
           "scope": [],
           "ordinal": 1
         },
         {
           "name": "ts",
           "kind": "variable",
-          "line": 16,
-          "endLine": 16,
+          "line": 19,
+          "endLine": 19,
           "exported": false,
           "signature": "ts",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303033,8 +303054,8 @@
         {
           "name": "sourcePath",
           "kind": "variable",
-          "line": 24,
-          "endLine": 24,
+          "line": 33,
+          "endLine": 33,
           "exported": false,
           "signature": "sourcePath",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303045,8 +303066,8 @@
         {
           "name": "source",
           "kind": "variable",
-          "line": 25,
-          "endLine": 25,
+          "line": 34,
+          "endLine": 34,
           "exported": false,
           "signature": "source",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303057,8 +303078,8 @@
         {
           "name": "js",
           "kind": "variable",
-          "line": 26,
-          "endLine": 33,
+          "line": 35,
+          "endLine": 42,
           "exported": false,
           "signature": "js",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303069,8 +303090,8 @@
         {
           "name": "store",
           "kind": "variable",
-          "line": 35,
-          "endLine": 35,
+          "line": 44,
+          "endLine": 44,
           "exported": false,
           "signature": "store",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303081,8 +303102,8 @@
         {
           "name": "localStorageStub",
           "kind": "variable",
-          "line": 36,
-          "endLine": 55,
+          "line": 45,
+          "endLine": 64,
           "exported": false,
           "signature": "localStorageStub",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303093,8 +303114,8 @@
         {
           "name": "length",
           "kind": "method",
-          "line": 37,
-          "endLine": 39,
+          "line": 46,
+          "endLine": 48,
           "exported": false,
           "signature": "length()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303111,8 +303132,8 @@
         {
           "name": "key",
           "kind": "method",
-          "line": 40,
-          "endLine": 42,
+          "line": 49,
+          "endLine": 51,
           "exported": false,
           "signature": "key(index)",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303129,8 +303150,8 @@
         {
           "name": "getItem",
           "kind": "method",
-          "line": 43,
-          "endLine": 45,
+          "line": 52,
+          "endLine": 54,
           "exported": false,
           "signature": "getItem(key)",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303147,8 +303168,8 @@
         {
           "name": "setItem",
           "kind": "method",
-          "line": 46,
-          "endLine": 48,
+          "line": 55,
+          "endLine": 57,
           "exported": false,
           "signature": "setItem(key, value)",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303165,8 +303186,8 @@
         {
           "name": "removeItem",
           "kind": "method",
-          "line": 49,
-          "endLine": 51,
+          "line": 58,
+          "endLine": 60,
           "exported": false,
           "signature": "removeItem(key)",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303183,8 +303204,8 @@
         {
           "name": "clear",
           "kind": "method",
-          "line": 52,
-          "endLine": 54,
+          "line": 61,
+          "endLine": 63,
           "exported": false,
           "signature": "clear()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303201,8 +303222,8 @@
         {
           "name": "windowStub",
           "kind": "variable",
-          "line": 57,
-          "endLine": 74,
+          "line": 66,
+          "endLine": 83,
           "exported": false,
           "signature": "windowStub",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303213,8 +303234,8 @@
         {
           "name": "addEventListener",
           "kind": "method",
-          "line": 61,
-          "endLine": 61,
+          "line": 70,
+          "endLine": 70,
           "exported": false,
           "signature": "addEventListener()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303231,8 +303252,8 @@
         {
           "name": "removeEventListener",
           "kind": "method",
-          "line": 62,
-          "endLine": 62,
+          "line": 71,
+          "endLine": 71,
           "exported": false,
           "signature": "removeEventListener()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303249,8 +303270,8 @@
         {
           "name": "dispatchEvent",
           "kind": "method",
-          "line": 63,
-          "endLine": 63,
+          "line": 72,
+          "endLine": 72,
           "exported": false,
           "signature": "dispatchEvent()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303267,8 +303288,8 @@
         {
           "name": "cancelAnimationFrame",
           "kind": "method",
-          "line": 69,
-          "endLine": 69,
+          "line": 78,
+          "endLine": 78,
           "exported": false,
           "signature": "cancelAnimationFrame()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303285,8 +303306,8 @@
         {
           "name": "documentStub",
           "kind": "variable",
-          "line": 76,
-          "endLine": 84,
+          "line": 85,
+          "endLine": 93,
           "exported": false,
           "signature": "documentStub",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303297,8 +303318,8 @@
         {
           "name": "addEventListener",
           "kind": "method",
-          "line": 81,
-          "endLine": 81,
+          "line": 90,
+          "endLine": 90,
           "exported": false,
           "signature": "addEventListener()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303315,8 +303336,8 @@
         {
           "name": "removeEventListener",
           "kind": "method",
-          "line": 82,
-          "endLine": 82,
+          "line": 91,
+          "endLine": 91,
           "exported": false,
           "signature": "removeEventListener()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303333,8 +303354,8 @@
         {
           "name": "BroadcastChannelStub",
           "kind": "class",
-          "line": 86,
-          "endLine": 91,
+          "line": 95,
+          "endLine": 100,
           "exported": false,
           "signature": "BroadcastChannelStub",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303345,8 +303366,8 @@
         {
           "name": "postMessage",
           "kind": "method",
-          "line": 87,
-          "endLine": 87,
+          "line": 96,
+          "endLine": 96,
           "exported": false,
           "signature": "postMessage()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303363,8 +303384,8 @@
         {
           "name": "addEventListener",
           "kind": "method",
-          "line": 88,
-          "endLine": 88,
+          "line": 97,
+          "endLine": 97,
           "exported": false,
           "signature": "addEventListener()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303381,8 +303402,8 @@
         {
           "name": "removeEventListener",
           "kind": "method",
-          "line": 89,
-          "endLine": 89,
+          "line": 98,
+          "endLine": 98,
           "exported": false,
           "signature": "removeEventListener()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303399,8 +303420,8 @@
         {
           "name": "close",
           "kind": "method",
-          "line": 90,
-          "endLine": 90,
+          "line": 99,
+          "endLine": 99,
           "exported": false,
           "signature": "close()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303417,8 +303438,8 @@
         {
           "name": "fetchStub",
           "kind": "variable",
-          "line": 93,
-          "endLine": 93,
+          "line": 102,
+          "endLine": 102,
           "exported": false,
           "signature": "fetchStub",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303429,8 +303450,8 @@
         {
           "name": "reactStub",
           "kind": "variable",
-          "line": 95,
-          "endLine": 103,
+          "line": 104,
+          "endLine": 112,
           "exported": false,
           "signature": "reactStub",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303441,8 +303462,8 @@
         {
           "name": "useEffect",
           "kind": "method",
-          "line": 98,
-          "endLine": 98,
+          "line": 107,
+          "endLine": 107,
           "exported": false,
           "signature": "useEffect()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303459,8 +303480,8 @@
         {
           "name": "useLayoutEffect",
           "kind": "method",
-          "line": 99,
-          "endLine": 99,
+          "line": 108,
+          "endLine": 108,
           "exported": false,
           "signature": "useLayoutEffect()",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303477,8 +303498,8 @@
         {
           "name": "jsxRuntimeStub",
           "kind": "variable",
-          "line": 104,
-          "endLine": 109,
+          "line": 113,
+          "endLine": 118,
           "exported": false,
           "signature": "jsxRuntimeStub",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303489,8 +303510,8 @@
         {
           "name": "reactDomStub",
           "kind": "variable",
-          "line": 110,
-          "endLine": 110,
+          "line": 119,
+          "endLine": 119,
           "exported": false,
           "signature": "reactDomStub",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303501,8 +303522,8 @@
         {
           "name": "stubRequire",
           "kind": "variable",
-          "line": 112,
-          "endLine": 117,
+          "line": 121,
+          "endLine": 126,
           "exported": false,
           "signature": "stubRequire",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303513,8 +303534,8 @@
         {
           "name": "moduleRecord",
           "kind": "variable",
-          "line": 119,
-          "endLine": 119,
+          "line": 128,
+          "endLine": 128,
           "exported": false,
           "signature": "moduleRecord",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303525,8 +303546,8 @@
         {
           "name": "evaluate",
           "kind": "variable",
-          "line": 120,
-          "endLine": 131,
+          "line": 129,
+          "endLine": 140,
           "exported": false,
           "signature": "evaluate",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303537,8 +303558,8 @@
         {
           "name": "lib",
           "kind": "variable",
-          "line": 144,
-          "endLine": 144,
+          "line": 153,
+          "endLine": 153,
           "exported": false,
           "signature": "lib",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303549,8 +303570,8 @@
         {
           "name": "required",
           "kind": "variable",
-          "line": 145,
-          "endLine": 157,
+          "line": 154,
+          "endLine": 166,
           "exported": false,
           "signature": "required",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303561,8 +303582,8 @@
         {
           "name": "checks",
           "kind": "variable",
-          "line": 165,
-          "endLine": 165,
+          "line": 174,
+          "endLine": 174,
           "exported": false,
           "signature": "checks",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303573,8 +303594,8 @@
         {
           "name": "failures",
           "kind": "variable",
-          "line": 166,
-          "endLine": 166,
+          "line": 175,
+          "endLine": 175,
           "exported": false,
           "signature": "failures",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303585,8 +303606,8 @@
         {
           "name": "check",
           "kind": "function",
-          "line": 167,
-          "endLine": 170,
+          "line": 176,
+          "endLine": 179,
           "exported": false,
           "signature": "check(condition, label)",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303597,8 +303618,8 @@
         {
           "name": "near",
           "kind": "function",
-          "line": 171,
-          "endLine": 176,
+          "line": 180,
+          "endLine": 185,
           "exported": false,
           "signature": "near(actual, expected, label, epsilon = 1e-9)",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303609,8 +303630,8 @@
         {
           "name": "zero",
           "kind": "variable",
-          "line": 178,
-          "endLine": 183,
+          "line": 187,
+          "endLine": 192,
           "exported": false,
           "signature": "zero",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303621,8 +303642,8 @@
         {
           "name": "entry",
           "kind": "function",
-          "line": 184,
-          "endLine": 197,
+          "line": 193,
+          "endLine": 206,
           "exported": false,
           "signature": "entry(overrides = {})",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303633,8 +303654,8 @@
         {
           "name": "points",
           "kind": "variable",
-          "line": 200,
-          "endLine": 203,
+          "line": 209,
+          "endLine": 212,
           "exported": false,
           "signature": "points",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303645,8 +303666,8 @@
         {
           "name": "ledgerAt10",
           "kind": "variable",
-          "line": 228,
-          "endLine": 228,
+          "line": 237,
+          "endLine": 237,
           "exported": false,
           "signature": "ledgerAt10",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303657,8 +303678,8 @@
         {
           "name": "balanced",
           "kind": "variable",
-          "line": 229,
-          "endLine": 235,
+          "line": 238,
+          "endLine": 244,
           "exported": false,
           "signature": "balanced",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303669,8 +303690,8 @@
         {
           "name": "gap",
           "kind": "variable",
-          "line": 238,
-          "endLine": 244,
+          "line": 247,
+          "endLine": 253,
           "exported": false,
           "signature": "gap",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303681,8 +303702,8 @@
         {
           "name": "smallGap",
           "kind": "variable",
-          "line": 252,
-          "endLine": 258,
+          "line": 261,
+          "endLine": 267,
           "exported": false,
           "signature": "smallGap",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303693,8 +303714,8 @@
         {
           "name": "csv",
           "kind": "variable",
-          "line": 280,
-          "endLine": 284,
+          "line": 289,
+          "endLine": 293,
           "exported": false,
           "signature": "csv",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303705,8 +303726,8 @@
         {
           "name": "csvResult",
           "kind": "variable",
-          "line": 285,
-          "endLine": 285,
+          "line": 294,
+          "endLine": 294,
           "exported": false,
           "signature": "csvResult",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303717,8 +303738,8 @@
         {
           "name": "csvRow",
           "kind": "variable",
-          "line": 288,
-          "endLine": 288,
+          "line": 297,
+          "endLine": 297,
           "exported": false,
           "signature": "csvRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303729,8 +303750,8 @@
         {
           "name": "usdCsv",
           "kind": "variable",
-          "line": 299,
-          "endLine": 299,
+          "line": 308,
+          "endLine": 308,
           "exported": false,
           "signature": "usdCsv",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303741,8 +303762,8 @@
         {
           "name": "usdRow",
           "kind": "variable",
-          "line": 300,
-          "endLine": 300,
+          "line": 309,
+          "endLine": 309,
           "exported": false,
           "signature": "usdRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303753,8 +303774,8 @@
         {
           "name": "splitCsv",
           "kind": "variable",
-          "line": 304,
-          "endLine": 304,
+          "line": 313,
+          "endLine": 313,
           "exported": false,
           "signature": "splitCsv",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303765,8 +303786,8 @@
         {
           "name": "splitRow",
           "kind": "variable",
-          "line": 305,
-          "endLine": 305,
+          "line": 314,
+          "endLine": 314,
           "exported": false,
           "signature": "splitRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303777,8 +303798,8 @@
         {
           "name": "missCsv",
           "kind": "variable",
-          "line": 310,
-          "endLine": 311,
+          "line": 319,
+          "endLine": 320,
           "exported": false,
           "signature": "missCsv",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303789,8 +303810,8 @@
         {
           "name": "missRow",
           "kind": "variable",
-          "line": 312,
-          "endLine": 312,
+          "line": 321,
+          "endLine": 321,
           "exported": false,
           "signature": "missRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303801,8 +303822,8 @@
         {
           "name": "importCsv",
           "kind": "variable",
-          "line": 317,
-          "endLine": 318,
+          "line": 326,
+          "endLine": 327,
           "exported": false,
           "signature": "importCsv",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303813,8 +303834,8 @@
         {
           "name": "firstImport",
           "kind": "variable",
-          "line": 319,
-          "endLine": 319,
+          "line": 328,
+          "endLine": 328,
           "exported": false,
           "signature": "firstImport",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303825,8 +303846,8 @@
         {
           "name": "secondImport",
           "kind": "variable",
-          "line": 320,
-          "endLine": 320,
+          "line": 329,
+          "endLine": 329,
           "exported": false,
           "signature": "secondImport",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303837,8 +303858,8 @@
         {
           "name": "importedOnce",
           "kind": "variable",
-          "line": 325,
-          "endLine": 325,
+          "line": 334,
+          "endLine": 334,
           "exported": false,
           "signature": "importedOnce",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303849,8 +303870,8 @@
         {
           "name": "importedTwice",
           "kind": "variable",
-          "line": 326,
-          "endLine": 326,
+          "line": 335,
+          "endLine": 335,
           "exported": false,
           "signature": "importedTwice",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303861,8 +303882,8 @@
         {
           "name": "jsonResult",
           "kind": "variable",
-          "line": 331,
-          "endLine": 345,
+          "line": 340,
+          "endLine": 354,
           "exported": false,
           "signature": "jsonResult",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303873,8 +303894,8 @@
         {
           "name": "jsonRow",
           "kind": "variable",
-          "line": 347,
-          "endLine": 347,
+          "line": 356,
+          "endLine": 356,
           "exported": false,
           "signature": "jsonRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303885,8 +303906,8 @@
         {
           "name": "ledgerJson",
           "kind": "variable",
-          "line": 352,
-          "endLine": 370,
+          "line": 361,
+          "endLine": 379,
           "exported": false,
           "signature": "ledgerJson",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303897,8 +303918,8 @@
         {
           "name": "hostAt",
           "kind": "variable",
-          "line": 375,
-          "endLine": 375,
+          "line": 384,
+          "endLine": 384,
           "exported": false,
           "signature": "hostAt",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303909,8 +303930,8 @@
         {
           "name": "llmRecord",
           "kind": "variable",
-          "line": 376,
-          "endLine": 399,
+          "line": 385,
+          "endLine": 408,
           "exported": false,
           "signature": "llmRecord",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303921,8 +303942,8 @@
         {
           "name": "[hostLlm]",
           "kind": "variable",
-          "line": 400,
-          "endLine": 400,
+          "line": 409,
+          "endLine": 409,
           "exported": false,
           "signature": "[hostLlm]",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303933,8 +303954,8 @@
         {
           "name": "subagentByIndex",
           "kind": "variable",
-          "line": 412,
-          "endLine": 417,
+          "line": 421,
+          "endLine": 426,
           "exported": false,
           "signature": "subagentByIndex",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303945,8 +303966,8 @@
         {
           "name": "[indexed]",
           "kind": "variable",
-          "line": 418,
-          "endLine": 420,
+          "line": 427,
+          "endLine": 429,
           "exported": false,
           "signature": "[indexed]",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303957,8 +303978,8 @@
         {
           "name": "geminiRecord",
           "kind": "variable",
-          "line": 423,
-          "endLine": 428,
+          "line": 432,
+          "endLine": 437,
           "exported": false,
           "signature": "geminiRecord",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303969,8 +303990,8 @@
         {
           "name": "[nonDeepseek]",
           "kind": "variable",
-          "line": 429,
-          "endLine": 429,
+          "line": 438,
+          "endLine": 438,
           "exported": false,
           "signature": "[nonDeepseek]",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303981,8 +304002,8 @@
         {
           "name": "deepseekAccount",
           "kind": "variable",
-          "line": 438,
-          "endLine": 443,
+          "line": 447,
+          "endLine": 452,
           "exported": false,
           "signature": "deepseekAccount",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -303993,8 +304014,8 @@
         {
           "name": "[accountRow]",
           "kind": "variable",
-          "line": 444,
-          "endLine": 444,
+          "line": 453,
+          "endLine": 453,
           "exported": false,
           "signature": "[accountRow]",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -304005,8 +304026,8 @@
         {
           "name": "toolRecord",
           "kind": "variable",
-          "line": 451,
-          "endLine": 464,
+          "line": 460,
+          "endLine": 473,
           "exported": false,
           "signature": "toolRecord",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -304017,8 +304038,8 @@
         {
           "name": "[hostTool]",
           "kind": "variable",
-          "line": 465,
-          "endLine": 465,
+          "line": 474,
+          "endLine": 474,
           "exported": false,
           "signature": "[hostTool]",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -304029,8 +304050,8 @@
         {
           "name": "reconcileRow",
           "kind": "variable",
-          "line": 475,
-          "endLine": 489,
+          "line": 484,
+          "endLine": 498,
           "exported": false,
           "signature": "reconcileRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -304041,8 +304062,8 @@
         {
           "name": "importRow",
           "kind": "variable",
-          "line": 495,
-          "endLine": 508,
+          "line": 504,
+          "endLine": 517,
           "exported": false,
           "signature": "importRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -304053,8 +304074,8 @@
         {
           "name": "droppedRow",
           "kind": "variable",
-          "line": 512,
-          "endLine": 522,
+          "line": 521,
+          "endLine": 531,
           "exported": false,
           "signature": "droppedRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -304065,8 +304086,8 @@
         {
           "name": "hostRow",
           "kind": "variable",
-          "line": 525,
-          "endLine": 539,
+          "line": 534,
+          "endLine": 548,
           "exported": false,
           "signature": "hostRow",
           "file": "plugins/usage-popup/test/logic.test.mjs",
@@ -304162,199 +304183,199 @@
         },
         {
           "name": "join",
-          "line": 14,
+          "line": 15,
+          "from": "",
+          "fromId": null,
+          "qualifier": "path"
+        },
+        {
+          "name": "join",
+          "line": 16,
           "from": "",
           "fromId": null,
           "qualifier": "path"
         },
         {
           "name": "require",
-          "line": 18,
+          "line": 22,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "error",
-          "line": 20,
+          "line": 29,
           "from": "",
           "fromId": null,
           "qualifier": "console"
         },
         {
+          "name": "join",
+          "line": 29,
+          "from": "",
+          "fromId": null,
+          "qualifier": "tsCandidates.map((candidate) => ` ${candidate}`)"
+        },
+        {
+          "name": "map",
+          "line": 29,
+          "from": "",
+          "fromId": null,
+          "qualifier": "tsCandidates"
+        },
+        {
           "name": "exit",
-          "line": 21,
+          "line": 30,
           "from": "",
           "fromId": null,
           "qualifier": "process"
         },
         {
           "name": "join",
-          "line": 24,
+          "line": 33,
           "from": "",
           "fromId": null,
           "qualifier": "path"
         },
         {
           "name": "readFileSync",
-          "line": 25,
+          "line": 34,
           "from": "",
           "fromId": null,
           "qualifier": "fs"
         },
         {
           "name": "transpileModule",
-          "line": 26,
+          "line": 35,
           "from": "",
           "fromId": null,
           "qualifier": "ts"
         },
         {
           "name": "Map",
-          "line": 35,
+          "line": 44,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "from",
-          "line": 41,
+          "line": 50,
           "from": "key",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:localStorageStub@1/method:key@1",
           "qualifier": "Array"
         },
         {
           "name": "keys",
-          "line": 41,
+          "line": 50,
           "from": "key",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:localStorageStub@1/method:key@1",
           "qualifier": "store"
         },
         {
           "name": "get",
-          "line": 44,
+          "line": 53,
           "from": "getItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:localStorageStub@1/method:getItem@1",
           "qualifier": "store"
         },
         {
           "name": "has",
-          "line": 44,
+          "line": 53,
           "from": "getItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:localStorageStub@1/method:getItem@1",
           "qualifier": "store"
         },
         {
           "name": "set",
-          "line": 47,
+          "line": 56,
           "from": "setItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:localStorageStub@1/method:setItem@1",
           "qualifier": "store"
         },
         {
           "name": "String",
-          "line": 47,
+          "line": 56,
           "from": "setItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:localStorageStub@1/method:setItem@1",
           "qualifier": null
         },
         {
           "name": "delete",
-          "line": 50,
+          "line": 59,
           "from": "removeItem",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:localStorageStub@1/method:removeItem@1",
           "qualifier": "store"
         },
         {
           "name": "clear",
-          "line": 53,
+          "line": 62,
           "from": "clear",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:localStorageStub@1/method:clear@1",
           "qualifier": "store"
         },
         {
           "name": "from",
-          "line": 59,
+          "line": 68,
           "from": "",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
           "qualifier": "Buffer"
         },
         {
           "name": "String",
-          "line": 59,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
-          "qualifier": null
-        },
-        {
-          "name": "toString",
-          "line": 59,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
-          "qualifier": "Buffer.from(String(value), 'binary')"
-        },
-        {
-          "name": "from",
-          "line": 60,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
-          "qualifier": "Buffer"
-        },
-        {
-          "name": "String",
-          "line": 60,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
-          "qualifier": null
-        },
-        {
-          "name": "toString",
-          "line": 60,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
-          "qualifier": "Buffer.from(String(value), 'base64')"
-        },
-        {
-          "name": "setTimeout",
           "line": 68,
           "from": "",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
           "qualifier": null
         },
         {
+          "name": "toString",
+          "line": 68,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
+          "qualifier": "Buffer.from(String(value), 'binary')"
+        },
+        {
+          "name": "from",
+          "line": 69,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
+          "qualifier": "Buffer"
+        },
+        {
+          "name": "String",
+          "line": 69,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
+          "qualifier": null
+        },
+        {
+          "name": "toString",
+          "line": 69,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
+          "qualifier": "Buffer.from(String(value), 'base64')"
+        },
+        {
+          "name": "setTimeout",
+          "line": 77,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:windowStub@1",
+          "qualifier": null
+        },
+        {
           "name": "Error",
-          "line": 93,
+          "line": 102,
           "from": "fetchStub",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:fetchStub@1",
           "qualifier": null
         },
         {
           "name": "reject",
-          "line": 93,
+          "line": 102,
           "from": "fetchStub",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:fetchStub@1",
           "qualifier": "Promise"
-        },
-        {
-          "name": "Symbol",
-          "line": 96,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "factory",
-          "line": 100,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:reactStub@1",
-          "qualifier": null
-        },
-        {
-          "name": "value",
-          "line": 102,
-          "from": "",
-          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:reactStub@1",
-          "qualifier": null
         },
         {
           "name": "Symbol",
@@ -304364,155 +304385,162 @@
           "qualifier": null
         },
         {
+          "name": "factory",
+          "line": 109,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:reactStub@1",
+          "qualifier": null
+        },
+        {
+          "name": "value",
+          "line": 111,
+          "from": "",
+          "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:reactStub@1",
+          "qualifier": null
+        },
+        {
+          "name": "Symbol",
+          "line": 114,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
           "name": "Error",
-          "line": 116,
+          "line": 125,
           "from": "stubRequire",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#owner:stubRequire@1",
           "qualifier": null
         },
         {
           "name": "Function",
-          "line": 120,
+          "line": 129,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "evaluate",
-          "line": 132,
+          "line": 141,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "error",
-          "line": 160,
+          "line": 169,
           "from": "",
           "fromId": null,
           "qualifier": "console"
         },
         {
           "name": "exit",
-          "line": 161,
+          "line": 170,
           "from": "",
           "fromId": null,
           "qualifier": "process"
         },
         {
           "name": "push",
-          "line": 169,
+          "line": 178,
           "from": "check",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#function:check@1",
           "qualifier": "failures"
         },
         {
           "name": "check",
-          "line": 172,
+          "line": 181,
           "from": "near",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#function:near@1",
           "qualifier": null
         },
         {
           "name": "abs",
-          "line": 173,
+          "line": 182,
           "from": "near",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#function:near@1",
           "qualifier": "Math"
         },
         {
           "name": "random",
-          "line": 186,
+          "line": 195,
           "from": "entry",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#function:entry@1",
           "qualifier": "Math"
         },
         {
           "name": "slice",
-          "line": 186,
+          "line": 195,
           "from": "entry",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#function:entry@1",
           "qualifier": "Math.random().toString(36)"
         },
         {
           "name": "toString",
-          "line": 186,
+          "line": 195,
           "from": "entry",
           "fromId": "sym:v1:plugins%2Fusage-popup%2Ftest%2Flogic.test.mjs#function:entry@1",
           "qualifier": "Math.random()"
         },
         {
           "name": "apiSpendInWindow",
-          "line": 204,
+          "line": 213,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "near",
-          "line": 204,
+          "line": 213,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "near",
-          "line": 205,
+          "line": 214,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "apiSpendInWindow",
-          "line": 206,
+          "line": 215,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 218,
+          "line": 227,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "apiSpendInWindow",
-          "line": 219,
+          "line": 228,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 222,
+          "line": 231,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "apiSpendInWindow",
-          "line": 223,
+          "line": 232,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "entry",
-          "line": 228,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "planReconciliation",
-          "line": 229,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "check",
-          "line": 236,
+          "line": 237,
           "from": "",
           "fromId": null,
           "qualifier": null
@@ -304525,13 +304553,6 @@
           "qualifier": "lib"
         },
         {
-          "name": "entry",
-          "line": 243,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
           "name": "check",
           "line": 245,
           "from": "",
@@ -304539,50 +304560,50 @@
           "qualifier": null
         },
         {
-          "name": "near",
-          "line": 246,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 247,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 248,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 249,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 250,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
           "name": "planReconciliation",
-          "line": 252,
+          "line": 247,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "entry",
+          "line": 252,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 254,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "near",
+          "line": 255,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 256,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
           "line": 257,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 258,
           "from": "",
           "fromId": null,
           "qualifier": null
@@ -304595,71 +304616,36 @@
           "qualifier": null
         },
         {
-          "name": "check",
-          "line": 262,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "billedOutputTokens",
-          "line": 263,
+          "name": "planReconciliation",
+          "line": 261,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
-          "name": "check",
+          "name": "entry",
           "line": 266,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
+          "name": "check",
+          "line": 268,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 271,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
           "name": "billedOutputTokens",
-          "line": 267,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "check",
           "line": 272,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "resolveProjectionMode",
-          "line": 272,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "check",
-          "line": 273,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "resolveProjectionMode",
-          "line": 273,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "check",
-          "line": 274,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "resolveProjectionMode",
-          "line": 274,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
@@ -304672,21 +304658,7 @@
           "qualifier": null
         },
         {
-          "name": "hostCursorWasReset",
-          "line": 275,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "check",
-          "line": 276,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "hostCursorWasReset",
+          "name": "billedOutputTokens",
           "line": 276,
           "from": "",
           "fromId": null,
@@ -304694,27 +304666,69 @@
         },
         {
           "name": "check",
-          "line": 277,
+          "line": 281,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
-          "name": "hostCursorWasReset",
-          "line": 277,
+          "name": "resolveProjectionMode",
+          "line": 281,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
-          "name": "join",
+          "name": "check",
+          "line": 282,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "resolveProjectionMode",
+          "line": 282,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
+          "name": "check",
+          "line": 283,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "resolveProjectionMode",
+          "line": 283,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
+          "name": "check",
           "line": 284,
           "from": "",
           "fromId": null,
-          "qualifier": "[ 'date,model,input_tokens,output_tokens,cache_hit_tokens,cost', '2026-01-02,deepseek-flash,1000,200,300,0.42', ',deepseek-flash,1,1,0,0.01', ]"
+          "qualifier": null
         },
         {
-          "name": "parseDashboardExport",
+          "name": "hostCursorWasReset",
+          "line": 284,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
+          "name": "check",
+          "line": 285,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "hostCursorWasReset",
           "line": 285,
           "from": "",
           "fromId": null,
@@ -304728,53 +304742,25 @@
           "qualifier": null
         },
         {
-          "name": "check",
-          "line": 287,
+          "name": "hostCursorWasReset",
+          "line": 286,
           "from": "",
           "fromId": null,
-          "qualifier": null
+          "qualifier": "lib"
         },
         {
-          "name": "check",
-          "line": 289,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 290,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 291,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "near",
-          "line": 292,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
+          "name": "join",
           "line": 293,
           "from": "",
           "fromId": null,
-          "qualifier": null
+          "qualifier": "[ 'date,model,input_tokens,output_tokens,cache_hit_tokens,cost', '2026-01-02,deepseek-flash,1000,200,300,0.42', ',deepseek-flash,1,1,0,0.01', ]"
         },
         {
-          "name": "check",
+          "name": "parseDashboardExport",
           "line": 294,
           "from": "",
           "fromId": null,
-          "qualifier": null
+          "qualifier": "lib"
         },
         {
           "name": "check",
@@ -304792,17 +304778,24 @@
         },
         {
           "name": "check",
-          "line": 297,
+          "line": 298,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
-          "name": "parseDashboardExport",
+          "name": "check",
+          "line": 299,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
           "line": 300,
           "from": "",
           "fromId": null,
-          "qualifier": "lib"
+          "qualifier": null
         },
         {
           "name": "near",
@@ -304812,11 +304805,32 @@
           "qualifier": null
         },
         {
-          "name": "parseDashboardExport",
+          "name": "check",
+          "line": 302,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 303,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 304,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
           "line": 305,
           "from": "",
           "fromId": null,
-          "qualifier": "lib"
+          "qualifier": null
         },
         {
           "name": "check",
@@ -304826,91 +304840,63 @@
           "qualifier": null
         },
         {
-          "name": "check",
-          "line": 307,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
           "name": "parseDashboardExport",
-          "line": 312,
+          "line": 309,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
-        },
-        {
-          "name": "check",
-          "line": 313,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 314,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "importCsv",
-          "line": 319,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "parseDashboardExport",
-          "line": 319,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "importCsv",
-          "line": 320,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "parseDashboardExport",
-          "line": 320,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "check",
-          "line": 321,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "replaceImportedEntries",
-          "line": 325,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "replaceImportedEntries",
-          "line": 326,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "check",
-          "line": 327,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
         },
         {
           "name": "near",
+          "line": 310,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "parseDashboardExport",
+          "line": 314,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
+          "name": "check",
+          "line": 315,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 316,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "parseDashboardExport",
+          "line": 321,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
+          "name": "check",
+          "line": 322,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 323,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "importCsv",
           "line": 328,
           "from": "",
           "fromId": null,
@@ -304918,161 +304904,203 @@
         },
         {
           "name": "parseDashboardExport",
-          "line": 331,
+          "line": 328,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
-          "name": "stringify",
-          "line": 332,
-          "from": "",
-          "fromId": null,
-          "qualifier": "JSON"
-        },
-        {
-          "name": "check",
-          "line": 346,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 348,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 349,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "near",
-          "line": 350,
+          "name": "importCsv",
+          "line": 329,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "parseDashboardExport",
-          "line": 352,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "stringify",
-          "line": 353,
-          "from": "",
-          "fromId": null,
-          "qualifier": "JSON"
-        },
-        {
-          "name": "UTC",
-          "line": 360,
-          "from": "",
-          "fromId": null,
-          "qualifier": "Date"
-        },
-        {
-          "name": "check",
-          "line": 371,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 372,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "UTC",
-          "line": 375,
-          "from": "",
-          "fromId": null,
-          "qualifier": "Date"
-        },
-        {
-          "name": "entriesForHostRecords",
-          "line": 400,
+          "line": 329,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 401,
+          "line": 330,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
-          "name": "check",
-          "line": 402,
+          "name": "replaceImportedEntries",
+          "line": 334,
           "from": "",
           "fromId": null,
-          "qualifier": null
+          "qualifier": "lib"
+        },
+        {
+          "name": "replaceImportedEntries",
+          "line": 335,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 403,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 404,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 405,
+          "line": 336,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "near",
-          "line": 406,
+          "line": 337,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
-          "name": "usageCostRmb",
-          "line": 408,
+          "name": "parseDashboardExport",
+          "line": 340,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
+          "name": "stringify",
+          "line": 341,
+          "from": "",
+          "fromId": null,
+          "qualifier": "JSON"
+        },
+        {
+          "name": "check",
+          "line": 355,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 357,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 358,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "near",
+          "line": 359,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "parseDashboardExport",
+          "line": 361,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
+          "name": "stringify",
+          "line": 362,
+          "from": "",
+          "fromId": null,
+          "qualifier": "JSON"
+        },
+        {
+          "name": "UTC",
+          "line": 369,
+          "from": "",
+          "fromId": null,
+          "qualifier": "Date"
+        },
+        {
+          "name": "check",
+          "line": 380,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 381,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "UTC",
+          "line": 384,
+          "from": "",
+          "fromId": null,
+          "qualifier": "Date"
+        },
+        {
           "name": "entriesForHostRecords",
-          "line": 418,
+          "line": 409,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 421,
+          "line": 410,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
+          "name": "check",
+          "line": 411,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 412,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 413,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 414,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "near",
+          "line": 415,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "usageCostRmb",
+          "line": 417,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
           "name": "entriesForHostRecords",
-          "line": 429,
+          "line": 427,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
@@ -305085,232 +305113,246 @@
           "qualifier": null
         },
         {
-          "name": "check",
-          "line": 431,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 432,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 433,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
           "name": "entriesForHostRecords",
-          "line": 444,
+          "line": 438,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 445,
+          "line": 439,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "check",
-          "line": 446,
+          "line": 440,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 441,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 442,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "entriesForHostRecords",
-          "line": 465,
+          "line": 453,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 466,
+          "line": 454,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "check",
-          "line": 467,
+          "line": 455,
           "from": "",
           "fromId": null,
           "qualifier": null
+        },
+        {
+          "name": "entriesForHostRecords",
+          "line": 474,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 468,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 469,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "near",
-          "line": 470,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "near",
-          "line": 471,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 472,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "normalizeEntry",
           "line": 475,
           "from": "",
           "fromId": null,
-          "qualifier": "lib"
+          "qualifier": null
         },
         {
           "name": "check",
-          "line": 490,
+          "line": 476,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 477,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 478,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "near",
-          "line": 491,
+          "line": 479,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "near",
+          "line": 480,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "check",
-          "line": 492,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 493,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "normalizeEntry",
-          "line": 495,
-          "from": "",
-          "fromId": null,
-          "qualifier": "lib"
-        },
-        {
-          "name": "check",
-          "line": 509,
-          "from": "",
-          "fromId": null,
-          "qualifier": null
-        },
-        {
-          "name": "check",
-          "line": 510,
+          "line": 481,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "normalizeEntry",
-          "line": 512,
+          "line": 484,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 523,
+          "line": 499,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "near",
+          "line": 500,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 501,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 502,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "normalizeEntry",
-          "line": 525,
+          "line": 504,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "check",
-          "line": 540,
+          "line": 518,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "check",
-          "line": 541,
+          "line": 519,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "normalizeEntry",
+          "line": 521,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
+          "name": "check",
+          "line": 532,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "normalizeEntry",
+          "line": 534,
+          "from": "",
+          "fromId": null,
+          "qualifier": "lib"
+        },
+        {
+          "name": "check",
+          "line": 549,
+          "from": "",
+          "fromId": null,
+          "qualifier": null
+        },
+        {
+          "name": "check",
+          "line": 550,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "entryCostRmb",
-          "line": 542,
+          "line": 551,
           "from": "",
           "fromId": null,
           "qualifier": "lib"
         },
         {
           "name": "near",
-          "line": 542,
+          "line": 551,
           "from": "",
           "fromId": null,
           "qualifier": null
         },
         {
           "name": "error",
-          "line": 545,
+          "line": 554,
           "from": "",
           "fromId": null,
           "qualifier": "console"
         },
         {
           "name": "error",
-          "line": 546,
+          "line": 555,
           "from": "",
           "fromId": null,
           "qualifier": "console"
         },
         {
           "name": "exit",
-          "line": 547,
+          "line": 556,
           "from": "",
           "fromId": null,
           "qualifier": "process"
         },
         {
           "name": "log",
-          "line": 549,
+          "line": 558,
           "from": "",
           "fromId": null,
           "qualifier": "console"
@@ -306815,7 +306857,7 @@
     {
       "path": "presets/architect-preset/index.js",
       "lang": "javascript",
-      "mtimeMs": 1794683435167.3516,
+      "mtimeMs": 1795149530699.9277,
       "symbols": [
         {
           "name": "name",
@@ -308825,7 +308867,7 @@
     {
       "path": "presets/architect-preset/smoke.test.mjs",
       "lang": "javascript",
-      "mtimeMs": 1794683435171.7512,
+      "mtimeMs": 1795149530711.5083,
       "symbols": [
         {
           "name": "SOURCE",

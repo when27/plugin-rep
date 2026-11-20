@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@local/dsh-architect-preset':
-        specifier: link:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/architect-preset
-        version: link:../../../Documents/deepseek-harness/default-workspace/architect-preset
+        specifier: link:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/presets/architect-preset
+        version: link:../../../Documents/deepseek-harness/default-workspace/presets/architect-preset
       dsh-code-index:
         specifier: ^0.12.0
         version: 0.12.0
@@ -24,11 +24,11 @@ importers:
         specifier: ^2.4.1
         version: 2.4.1
       dsh-tier-router:
-        specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/router-tarball/dsh-tier-router-0.6.0.tgz
-        version: file:../../../Documents/deepseek-harness/default-workspace/router-tarball/dsh-tier-router-0.6.0.tgz
+        specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz
+        version: file:../../../Documents/deepseek-harness/default-workspace/packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz
       obsidian-task-sync:
-        specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz
-        version: file:../../../Documents/deepseek-harness/default-workspace/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz
+        specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz
+        version: file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz
       usage-popup:
         specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/usage-popup/usage-popup-0.1.2.tgz
         version: file:../../../Documents/deepseek-harness/default-workspace/usage-popup/usage-popup-0.1.2.tgz
@@ -233,8 +233,8 @@ packages:
     resolution: {integrity: sha512-l4nGT8aVzOcLdDT9su7hSY4shwl9gAkXQU+HQs/yNV30TPW9o5+Z6JJBqAlP+wiUQn82t4YF4LRiHFa92h18MA==}
     engines: {node: '>=18'}
 
-  dsh-tier-router@file:../../../Documents/deepseek-harness/default-workspace/router-tarball/dsh-tier-router-0.6.0.tgz:
-    resolution: {integrity: sha512-goi0Cp0dXR7NJtfIej11o0yaI9BWUNGHRc1n4hxcq57Iaatuo9lDn19kxmIJnoO65d2K3m3X1SzSFkGMvBgrLw==, tarball: file:../../../Documents/deepseek-harness/default-workspace/router-tarball/dsh-tier-router-0.6.0.tgz}
+  dsh-tier-router@file:../../../Documents/deepseek-harness/default-workspace/packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz:
+    resolution: {integrity: sha512-goi0Cp0dXR7NJtfIej11o0yaI9BWUNGHRc1n4hxcq57Iaatuo9lDn19kxmIJnoO65d2K3m3X1SzSFkGMvBgrLw==, tarball: file:../../../Documents/deepseek-harness/default-workspace/packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz}
     version: 0.6.0
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.2
@@ -257,8 +257,8 @@ packages:
       react:
         optional: true
 
-  obsidian-task-sync@file:../../../Documents/deepseek-harness/default-workspace/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz:
-    resolution: {integrity: sha512-hi6pp5ENAi2wXjNSkW+tYswiE9y520rnZSxcuKauosVWVE6Cz/PbZbkTVvSS4Q09jdTiU1yPgo+7t1QoIFmlmA==, tarball: file:../../../Documents/deepseek-harness/default-workspace/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz}
+  obsidian-task-sync@file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz:
+    resolution: {integrity: sha512-hi6pp5ENAi2wXjNSkW+tYswiE9y520rnZSxcuKauosVWVE6Cz/PbZbkTVvSS4Q09jdTiU1yPgo+7t1QoIFmlmA==, tarball: file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz}
     version: 0.1.0
     engines: {dsh: ^0.2.2-rc.1, node: '>=20'}
     peerDependencies:
@@ -431,7 +431,7 @@ snapshots:
 
   dsh-plugin-save-token@2.4.1: {}
 
-  dsh-tier-router@file:../../../Documents/deepseek-harness/default-workspace/router-tarball/dsh-tier-router-0.6.0.tgz:
+  dsh-tier-router@file:../../../Documents/deepseek-harness/default-workspace/packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz:
     dependencies:
       '@deepseek-ai/schemastery': 3.19.0
 
@@ -441,7 +441,7 @@ snapshots:
 
   markdown-to-jsx@7.7.17: {}
 
-  obsidian-task-sync@file:../../../Documents/deepseek-harness/default-workspace/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz: {}
+  obsidian-task-sync@file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz: {}
 
   readdirp@4.1.2: {}
 

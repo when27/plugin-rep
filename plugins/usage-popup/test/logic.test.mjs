@@ -11,13 +11,22 @@ import { fileURLToPath } from 'node:url'
 const require = createRequire(import.meta.url)
 const here = path.dirname(fileURLToPath(import.meta.url))
 const workspace = path.resolve(here, '..', '..', '..')
-const tsEntry = path.join(workspace, 'usage-popup', 'node_modules', 'typescript')
+const tsCandidates = [
+  path.join(here, '..', 'node_modules', 'typescript'), // self-contained install
+  path.join(workspace, 'usage-popup', 'node_modules', 'typescript'), // source-machine fallback
+]
 
 let ts
-try {
-  ts = require(tsEntry)
-} catch (error) {
-  console.error(`Cannot load typescript from ${tsEntry}: ${error.message}`)
+for (const candidate of tsCandidates) {
+  try {
+    ts = require(candidate)
+    break
+  } catch {
+    // try the next candidate
+  }
+}
+if (ts === undefined) {
+  console.error(`Cannot load typescript; looked in:\n${tsCandidates.map((candidate) => `  ${candidate}`).join('\n')}`)
   process.exit(1)
 }
 

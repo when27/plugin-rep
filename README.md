@@ -6,50 +6,82 @@ plugins, a locally patched `dsh-tier-router` build, the patch files that produce
 and the **modern-web-guidance** skill. Its purpose is to let you restore and reproduce
 this setup on another machine.
 
+Every feature folder carries its own **`OVERVIEW.md`** dictionary (files, wiring,
+build/test commands, and caveats). This README is the human-facing setup guide;
+[AGENTS.md](AGENTS.md) is the agent-facing master index and operating guide.
+
 - **Export date:** 2026-11-13
 - **Source machine:** Windows x64; DSH Desktop 0.2.2-rc.1, Node 24.21.0, pnpm 11.28.5
-- **Not included:** `node_modules`, build output and caches, logs, crash dumps, `*.bak*`,
+- **Not included:** `node_modules`, build caches, logs, crash dumps, `*.bak*`,
   SQLite/DB files, credential/auth/cookie files, `.env`/`.npmrc`/`.netrc`.
 
 ## What is in here
 
-| Path | What it is |
-| --- | --- |
-| `profiles/` | DSH profile configuration: the desktop profile (plugin composition patch, manifest, lockfile, compatibility pin) and the global agent rules copy. |
-| `presets/architect-preset/` | Source of the **Architect** agent preset: the restriction plugin, its preset definition, package manifest, and a dependency-free smoke test. |
-| `plugins/usage-popup/` | Local client plugin: a global sidebar-launched token/cost ledger panel with per-chat history selection. |
-| `plugins/obsidian-task-sync/` | Local plugin that bridges an Obsidian vault (tasks, headings, tree points) into the web UI. |
-| `patches/` | The two local patches applied to `dsh-tier-router` 0.6.0 (tier fallbacks and worker-usage fields). |
-| `packages/` | `dsh-tier-router-0.6.0.tgz`, the patched build produced from those patches; the profile installs it via `file:`. |
-| `skills/modern-web-guidance/` | A DSH skill with its manifest plus a large library of modern web guidance under `guides/`. |
-| `architect-preset/`, `obsidian-task-sync/`, `usage-popup/`, `router-tarball/` | Working copies / build directories of the same components (superseded in part by the `presets/`, `plugins/` and `packages/` trees). |
-| `.dsh/` | Project-local DSH state, including project-level skills. |
-| `.dsh-work/`, `.dsh-code-index/`, `.probe/`, `.probe-extract/` | Local tooling and scratch output; not part of the restore set. |
-| `.preset-probe.cjs`, `patches-draft.patch` | Ad-hoc helper script and a draft patch left over from the patch work. |
+| Feature | Dictionary | What it is |
+| --- | --- | --- |
+| `profiles/desktop/` | [OVERVIEW.md](profiles/desktop/OVERVIEW.md) | The active DSH profile: plugin composition patch, manifest, lockfile, compatibility pin, and model/preset defaults. |
+| `profiles/global/` | [agent_rules.md](profiles/global/agent_rules.md) | Human-readable copy of the master/subagent operating rules (not auto-loaded; documented in the profile dictionary). |
+| `presets/architect-preset/` | [OVERVIEW.md](presets/architect-preset/OVERVIEW.md) | Source of the **Architect** agent preset: restriction plugin, preset definition, manifest, and dependency-free smoke test. |
+| `plugins/usage-popup/` | [OVERVIEW.md](plugins/usage-popup/OVERVIEW.md) | True-sync token/cost ledger: host collector + `/usage-popup/api/*`, sidebar launcher, and root overlay panel. |
+| `plugins/obsidian-task-sync/` | [OVERVIEW.md](plugins/obsidian-task-sync/OVERVIEW.md) | Obsidian vault SSE bridge, daily checklist widget, and skill-tree canvas. |
+| `packages/dsh-tier-router/` | [OVERVIEW.md](packages/dsh-tier-router/OVERVIEW.md) | The patched `dsh-tier-router@0.6.0` tarball plus the two source patches that produced it. |
+| `skills/modern-web-guidance/` | [OVERVIEW.md](skills/modern-web-guidance/OVERVIEW.md) | A DSH skill manifest plus 209 categorized modern-web guidance files under `guides/`. |
 
-## How it is used
+The source machine also keeps the original working directories (`architect-preset/`,
+`obsidian-task-sync/`, `usage-popup/`, `router-tarball/`) for its live profile. They are
+**not part of the restore set**; the feature trees above are the canonical copies.
 
-1. Install a compatible DSH (DSH Desktop `0.2.2-rc.1` or a compatible newer build).
-2. Copy `profiles/desktop/*` into your DSH profiles directory, then fix the
-   source-machine absolute `file:`/`link:` paths in `profiles/desktop/package.json`.
-3. Rebuild and pack the two plugins from `plugins/*` (build artifacts are excluded from
-   this export), then run `pnpm install` in the profile directory.
-4. Resolve the `dsh-ops` preset conflict described in the agent instructions, and copy
-   `skills/modern-web-guidance` into a DSH skill discovery root.
-5. Restart DSH fully and start a new session so the **Architect** preset applies.
+## Restore
 
-The full step-by-step restore procedure, the caveats, and the design notes for the
-Architect preset live in the agent-facing instructions.
+1. Install a compatible DSH (DSH Desktop `0.2.2-rc.1` or a compatible newer build;
+   Node ≥ 20, pnpm 11.x).
+2. Copy `profiles/desktop/*` into your DSH profiles directory
+   (`%USERPROFILE%\.dsh\profiles\desktop\` on Windows, `~/.dsh/profiles/desktop/` on
+   macOS/Linux). Keep `cordis.yml` as the empty list; all customization belongs in
+   `cordis.patch.yml`.
+3. Fix the source-machine paths in `profiles/desktop/package.json`:
+
+   ```jsonc
+   "@local/dsh-architect-preset": "link:<repo>/presets/architect-preset",
+   "dsh-tier-router": "file:<repo>/packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz",
+   "obsidian-task-sync": "file:<repo>/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz",
+   "usage-popup": "file:<repo>/plugins/usage-popup/usage-popup-0.3.0.tgz"
+   ```
+
+4. Install the profile dependencies:
+
+   ```bash
+   cd ~/.dsh/profiles/desktop
+   pnpm install
+   ```
+
+5. Resolve the `dsh-ops` preset conflict (rename
+   `node_modules/dsh-ops/presets/ops-ptc.patch.yml` before starting DSH) — see the
+   caveat in [AGENTS.md](AGENTS.md).
+6. Copy `skills/modern-web-guidance` into a DSH skill discovery root
+   (`~/.dsh/skills/` globally and/or `<project>/.dsh/skills/`). No profile config change
+   is needed.
+7. Restart DSH fully (quit from the tray, not a page refresh) and start a **new**
+   session so the Architect preset applies.
+
+The full step-by-step procedure, caveats, and verification results live in
+[AGENTS.md](AGENTS.md). Plugin build/pack and test commands live in each feature's
+`OVERVIEW.md`.
 
 ## Documentation
 
-- **[AGENTS.md](AGENTS.md)** — the detailed setup, restore procedure, caveats and design
-  notes. Agent operating rules are there too.
-- [`plugins/obsidian-task-sync/README.md`](plugins/obsidian-task-sync/README.md) — plugin
-  documentation (install, vault configuration, widget usage).
-- [`skills/modern-web-guidance/SKILL.md`](skills/modern-web-guidance/SKILL.md) — the skill
-  manifest and usage instructions.
+- [AGENTS.md](AGENTS.md) — master repository dictionary, global operating rules,
+  restore/restart procedure, caveats, and secret/exclusion notes.
+- [profiles/desktop/OVERVIEW.md](profiles/desktop/OVERVIEW.md) — profile dictionary.
+- [presets/architect-preset/OVERVIEW.md](presets/architect-preset/OVERVIEW.md) — preset dictionary.
+- [plugins/usage-popup/OVERVIEW.md](plugins/usage-popup/OVERVIEW.md) — usage-ledger dictionary.
+- [plugins/obsidian-task-sync/OVERVIEW.md](plugins/obsidian-task-sync/OVERVIEW.md) — Obsidian plugin dictionary.
+- [packages/dsh-tier-router/OVERVIEW.md](packages/dsh-tier-router/OVERVIEW.md) — router tarball/patch dictionary.
+- [skills/modern-web-guidance/OVERVIEW.md](skills/modern-web-guidance/OVERVIEW.md) — skill dictionary.
+- [plugins/obsidian-task-sync/README.md](plugins/obsidian-task-sync/README.md) — user-facing plugin documentation.
+- [plugins/usage-popup/ARCHITECTURE.md](plugins/usage-popup/ARCHITECTURE.md) — deep architecture map.
+- [skills/modern-web-guidance/SKILL.md](skills/modern-web-guidance/SKILL.md) — the skill manifest and usage instructions.
 
 ---
 
-Agents' operating rules now live in [AGENTS.md](AGENTS.md). This file is for humans.
+Agents' operating rules live in [AGENTS.md](AGENTS.md). This file is for humans.

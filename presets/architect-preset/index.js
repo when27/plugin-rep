@@ -89,9 +89,9 @@ const ARCHITECT_EFFORT = 'high'
 const WORKER_EFFORT = 'low'
 
 const ROSTER_DUMP =
-  'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/architect-preset/.roster.json'
+  'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/presets/architect-preset/.roster.json'
 const DIAG_DUMP =
-  'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/architect-preset/.diag.json'
+  'C:/Users/Administrator/Documents/deepseek-harness/default-workspace/presets/architect-preset/.diag.json'
 
 const MAIN_DENY_REASON = (toolName) =>
   `ROLE VIOLATION: the Architect main agent has no file/shell/inspection tools. ` +

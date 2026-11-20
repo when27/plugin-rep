@@ -1,5 +1,5 @@
 // Smoke tests for the Architect preset restriction plugin.
-// Run: node architect-preset/smoke.test.mjs
+// Run: node presets/architect-preset/smoke.test.mjs
 //
 // These tests exercise the mechanism DSH actually honors at runtime:
 //   * one GLOBAL guard registered on the ROOT tools service, which decides

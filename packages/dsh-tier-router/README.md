@@ -142,13 +142,13 @@ changed), which would corrupt the shared pnpm store. `apply.sh` replaces the
 whole package directory with a physical copy first. **Do not run the raw patch
 against the hoisted install.**
 
-The combined patch at `patches/dsh-tier-router-0.6.0-tier-fallbacks.patch` is
+The combined patch at `packages/dsh-tier-router/dsh-tier-router-0.6.0-tier-fallbacks.patch` is
 still reapplyable from the profile root on an already-physical copy:
 
 ```bash
 cd /c/Users/Administrator/.dsh/profiles/desktop
-patch -p1 --dry-run < /c/.../patches/dsh-tier-router-0.6.0-tier-fallbacks.patch
-patch -p1         < /c/.../patches/dsh-tier-router-0.6.0-tier-fallbacks.patch
+patch -p1 --dry-run < /c/.../packages/dsh-tier-router/dsh-tier-router-0.6.0-tier-fallbacks.patch
+patch -p1         < /c/.../packages/dsh-tier-router/dsh-tier-router-0.6.0-tier-fallbacks.patch
 ```
 
 (A `--dry-run` against the real, still-unpatched profile succeeds; it was run
@@ -212,5 +212,5 @@ See `.dsh-work/apply/sha256.txt`. Staged files:
 899d9af6ae2ee9b6a364dd0e642875902340a7977d48b5d58b3db4b6e8b67e09  .dsh-work/apply/dsh-tier-router/lib/models-api.js
 ed84732e6c168d1e140b3337b1f20e653f7b46778e38a1f483ffe71d60210c8b  .dsh-work/apply/dsh-tier-router/lib/types/index.d.ts
 d1b950dc333edaa268d3c4fdbef55c88340cc94b8c8882ad1bccbf4d655bcf4a  .dsh-work/apply/cordis.patch.yml
-3cc222a8616c178dba0ffb0376513203b808af5c2fadc298d392ecf57ebd8500  patches/dsh-tier-router-0.6.0-tier-fallbacks.patch
+3cc222a8616c178dba0ffb0376513203b808af5c2fadc298d392ecf57ebd8500  packages/dsh-tier-router/dsh-tier-router-0.6.0-tier-fallbacks.patch
 ```
