@@ -1,0 +1,9 @@
+# Bundle patch for `plugin-launcher`.
+#
+# The Host row is intentionally inert: this package is a web-only surface.
+# `dsh.client` supplies the single `sidebar.footer.action` button and the
+# `shell.overlay` tools-selection modal through `dist/client.js`.
+
+- insert:
+    - id: plugin-launcher
+      name: plugin-launcher

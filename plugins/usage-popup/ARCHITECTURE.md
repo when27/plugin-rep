@@ -19,12 +19,13 @@ One npm package ships two halves:
 | Half | Entry | Role |
 | --- | --- | --- |
 | Host (Node) | `dist/index.js` + `dist/host/*.js` | Append-only token/tool collector. Hooks `llm/stream` and `session/event`, wraps global `fetch`, persists JSONL under `$DSH_HOME/usage-popup/`, serves `/usage-popup/api/*`. |
-| Web client | `dist/client.js` | One sidebar cell + one root-level panel. Merges host records into a localStorage ledger, falls back to projection deltas, renders the ledger UI. |
+| Web client | `dist/client.js` | One `plugin-launcher` tool registration + one root-level panel. Merges host records into a localStorage ledger, falls back to projection deltas, renders the ledger UI. |
 
-The **only entry point is the global left sidebar**. The panel is mounted at the
-application shell (`shell.overlay`), so it opens from any screen. The client
-contributes **nothing visible** to `conversation.composer.dock`; the DSH-native
-token tracker is untouched.
+The **only entry point is the unified Plugin Tools menu**: this client registers
+`usage-popup.ledger` into `plugin-launcher`'s shared `window` registry, and the
+panel itself is mounted at the application shell (`shell.overlay`) so it opens
+from any screen. The client contributes **nothing visible** to
+`conversation.composer.dock`; the DSH-native token tracker is untouched.
 
 ```
 llm/stream ─┐
@@ -37,22 +38,27 @@ fetch wrap ─┘                                             │ (10 s poll, cu
                                                           │
                                      LedgerHud (shell.overlay, always mounted)
                                                           │
-                                     sidebar.footer.action (open/toggle)
+                                     plugin-launcher registry: True-sync ledger → open/toggle
 ```
 
 ---
 
 ## 1. File & line map
 
-### 1.1 `src/index.tsx` (6102 lines at 0.3.0)
+### 1.1 `src/index.tsx` (6,119 lines at 0.3.0)
 
 | Lines | Responsibility |
 | --- | --- |
-| 1–55 | File header, React/Cordis imports, `name`, `inject = ['slots', 'sessions']`. |
-| 56–122 | `TokenUsage`, host endpoint constants, `HostProbeState`, `resolveProjectionMode`, `hostCursorWasReset`, module-level `pluginContext`. |
-| 124–169 | **`apply(ctx)`** — the complete slot wiring (overlay + sidebar + null save-token cell). |
-| 171–233 | Ledger open-state controller (`createLedgerController`, `useLedgerOpen`, `OPEN_KEY`). |
-| 235–347 | Sidebar cell (`LedgerGlyph`, `SidebarLedgerButton`, `SidebarLauncher`) and `LedgerOverlay`. |
+| 1–58 | File header, React/Cordis imports, `name`, `inject = ['slots', 'sessions']`, start of the plugin-launcher registry bridge. |
+| 58–157 | Plugin-launcher bridge (`launcherRegistry`, `registerLauncherTool`, `effectOnce`) — the byte-compatible v1 contract. |
+| 159–224 | `TokenUsage`, host endpoint constants, `HostProbeState`, `resolveProjectionMode`, `hostCursorWasReset`, module-level `pluginContext`. |
+| 226–263 | **`apply(ctx)`** — the complete wiring (overlay + plugin-launcher tool + null save-token cell). |
+| 265–338 | Ledger open-state controller (`createLedgerController`, `useLedgerOpen`, `OPEN_KEY`). |
+| 340–362 | `LedgerGlyph` (also reused as the registry tool icon) and `LedgerOverlay`. |
+
+> The responsibility ranges below are from the pre-migration map and are shifted
+> by about +17 lines after the sidebar components moved out. Refresh them with
+> [§1.5](#15-refreshing-this-map) before relying on an exact range.
 | 350–575 | HUD geometry, Windows titlebar inset, all persistence keys, core domain types (`LedgerEntry`, `SessionAnchor`, `BalanceMeta`, `ModelRow`, routed-usage types), formatting helpers. |
 | 577–629 | RMB rate cards (`RATE_CARDS`, peak/off-peak pricing, `usageCostRmb`, `entryCostRmb`, cache savings). |
 | 631–781 | Tier-router usage registry (`/tier-router/api/usage` normalization and per-route rows). |
@@ -72,9 +78,9 @@ fetch wrap ─┘                                             │ (10 s poll, cu
 | 3655–3733 | Chat-selector data: `ChatOption`, `EMPTY_MODELS`, `buildChatOptions`. |
 | 3735–3810 | `useLiveSessionUsage` — retained-session projection subscription. |
 | 3812–4062 | `ChatSelect` dropdown (button, portaled menu, styles, outside-click/Escape). |
-| 4064–6102 | **`LedgerHud`** — the whole panel. See §1.2. |
+| 4081–6119 | **`LedgerHud`** — the whole panel. See §1.2. |
 
-### 1.2 `LedgerHud` internal map (4064–6102)
+### 1.2 `LedgerHud` internal map (4081–6119)
 
 | Lines (approx.) | Section |
 | --- | --- |
@@ -99,7 +105,7 @@ fetch wrap ─┘                                             │ (10 s poll, cu
 | 5118–5221 | Drag handling, clamping, persisted position. |
 | 5223–5342 | Ledger export/import/reset (including re-anchoring the active chat on reset). |
 | 5344–5352 | Breakdown rows and custom-range day count. |
-| 5354–6102 | Render: header 5354, face tabs ≈5420, timeframe group ≈5473, chat selector 5512, token totals ≈5580, cache/breakdown ≈5593, cost column ≈5629, "Models · this session" 5708, delegated 5840, "True balance" 5848, footer 6046–6069. |
+| 5371–6119 | Render: header 5354, face tabs ≈5420, timeframe group ≈5473, chat selector 5512, token totals ≈5580, cache/breakdown ≈5593, cost column ≈5629, "Models · this session" 5708, delegated 5840, "True balance" 5848, footer 6046–6069. |
 
 ### 1.3 Host half
 
@@ -120,7 +126,7 @@ fetch wrap ─┘                                             │ (10 s poll, cu
 | `test/host.test.mjs` | 422 | 95 checks: collector, store, tool fees, session meta. |
 | `test/transport.test.mjs` | 364 | 58 checks: fetch wrapper, `include_usage` injection, wire parsing. |
 | `test/integration.test.mjs` | 432 | 55 checks: host `apply()` against a fake ctx, event subscriptions, route registration. |
-| `test/client.test.mjs` | 236 | 23 checks: slot wiring (sidebar/overlay/no composer control) and `buildChatOptions` selection/aggregation. |
+| `test/client.test.mjs` | 236 | 26 checks: slot wiring (no sidebar cell, one overlay, one plugin-launcher tool, no composer control) and `buildChatOptions` selection/aggregation. |
 | `cordis.patch.yml` | — | Profile bundle patch: one row `usage-popup`. |
 | `cordis.yml` | — | Optional local-dev patch mounting `src/index.tsx` from a checkout. |
 
@@ -174,11 +180,11 @@ export const inject = ['slots', 'sessions']
   replacement.
 - `session` supplies `ctx.sessions` + the `useSessions` root hook.
 - `layout` supplies the `usePanelInfo` root hook.
-- `sidebar` owns `sidebar.footer.action`.
+- `sidebar` owns `sidebar.footer.action` and hosts `plugin-launcher`'s button.
 - `renderer` supplies the slot service.
 - `immediately: true` loads the client module at boot instead of lazily, so the
-  sidebar cell exists as soon as the shell paints. The Obsidian plugin uses the
-  same setting for its launcher.
+  ledger is registered in the Plugin Tools registry as soon as the shell paints.
+  The Obsidian plugin uses the same setting for its tool.
 
 Verified against the installed `app.asar` (2026-11-18): every package above
 declares a `dsh.client` web module in its own manifest, so all five inject
@@ -192,7 +198,7 @@ overlay.
 | Slot | Kind / scope | Registration | Props | Why |
 | --- | --- | --- | --- | --- |
 | `shell.overlay` | list / root | `{ id: 'usage-popup-ledger', order: 110 }` | Standard root props include `useSessions`, `usePanelInfo`, `useWorkspaces`, ... | Frame-wide floating layer above every column; the panel is independent of the conversation route. |
-| `sidebar.footer.action` | list / root | `{ id: 'usage-popup', order: 2, label: () => 'True-sync ledger' }` | Owner prop `{ wide: boolean }` | Global left-sidebar utility cell. `SidebarRoot` renders `footerActions` **above** `settingsArea` (the signed-in account bar). Ascending `order`: `cordis-panel` 0, Obsidian 1, this plugin 2. |
+| `plugin-launcher` registry | shared `window` registry / root | `register({ id: 'usage-popup.ledger', label: 'True-sync ledger', order: 20, badge: 'LIVE', onOpen })` | none | The unified **Plugin Tools** menu. The returned disposer is run from `ctx.effect`, so the row disappears on hot-reload/plugin unload. Ordering: `obsidian-task-sync.checklist` 10, this tool 20. See [`../../plugins/plugin-launcher/OVERVIEW.md`](../../plugins/plugin-launcher/OVERVIEW.md). |
 | `conversation.composer.dock` | list / session | `{ id: 'save-token-strip', order: 85, priority: -1 }` → renders `null` | Session props (unused) | **Invariant:** keep this registration. See §2.4. |
 
 Do **not** register a `conversation.composer.dock` occupant with id
@@ -234,16 +240,39 @@ useSessionAccess, useWorkspaceAccess
 - There is **no** `useProjection` at root scope. That hook only exists inside a
   Session-scoped slot. Use the retained-session path in §4.3 instead.
 
+### 2.6 Plugin Tools registration contract
+
+The visible entry point is owned by `plugin-launcher`, a sibling client bundle.
+There is no package import between them; both halves pin the same versioned
+global registry. The registrant-side helper in `src/index.tsx` is deliberately
+tiny and byte-compatible with the launcher:
+
+```ts
+const LAUNCHER_REGISTRY_KEY = '__DSH_PLUGIN_LAUNCHER_V1__'
+// adopt an existing v1 registry, otherwise create { register, getSnapshot,
+// subscribe, get, select } and pin it on window
+```
+
+- Registration payload: `{ id, label, description?, icon?, badge?, order?, onOpen }`.
+- `register()` returns an unsubscribe disposer; `apply()` runs it through
+  `ctx.effect(..., 'usage-popup: plugin-launcher tool')` so hot-reload/unload
+  removes the row.
+- Load order does not matter: the first bundle to evaluate creates the registry
+  and the other adopts it.
+- Changing the key or `version` requires a coordinated change in
+  [`../../plugins/plugin-launcher/src/index.tsx`](../../plugins/plugin-launcher/src/index.tsx)
+  and [`../../plugins/obsidian-task-sync/src/client.tsx`](../../plugins/obsidian-task-sync/src/client.tsx).
+
 ---
 
 ## 3. State & lifecycle
 
 ### 3.1 The cross-tree open controller
 
-The sidebar cell and the overlay are separate slot occupants with no common
+The Plugin Tools registry row and the overlay are separate mounts with no common
 React ancestor, so open state cannot use React context. `apply()` creates one
-controller (`createLedgerController`, [index.tsx:189](src/index.tsx)) and passes
-it to both components:
+controller (`createLedgerController`, [index.tsx:294](src/index.tsx)); the
+registry tool's `onOpen` and `LedgerOverlay` both use it:
 
 ```ts
 interface LedgerController {
@@ -288,8 +317,8 @@ single lump and balance samples would be missed.
 
 | Event | Effect |
 | --- | --- |
-| Boot | `readStoredFlag(OPEN_KEY, false)` → usually closed. Overlay and sidebar both subscribe. |
-| Sidebar click | `controller.toggle()` → both components re-render. |
+| Boot | `readStoredFlag(OPEN_KEY, false)` → usually closed. Overlay and the Plugin Tools row both subscribe. |
+| Plugin Tools row selected | `onOpen` calls `controller.setOpen(true)`; the launcher closes its own modal. |
 | Panel opens | `open` effect clears `lockedChatId` → auto-follow the active chat. |
 | Panel close (header ×) | `controller.setOpen(false)`; mounts stay, subscriptions stay. |
 | Overlay unmount (plugin unload) | `useLiveSessionUsage` cleanup releases the retained session; listeners unsubscribe. |
@@ -575,7 +604,9 @@ pnpm install
 # 7. Verify what is installed
 node -e "console.log(require('./node_modules/usage-popup/package.json').version)"
 grep -c "shell.overlay" node_modules/usage-popup/dist/client.js          # 2
-grep -c "sidebar.footer.action" node_modules/usage-popup/dist/client.js  # 2
+grep -c "__DSH_PLUGIN_LAUNCHER_V1__" node_modules/usage-popup/dist/client.js  # 1
+grep -c "usage-popup.ledger" node_modules/usage-popup/dist/client.js     # 1
+grep -c "sidebar.footer.action" node_modules/usage-popup/dist/client.js  # 0
 grep -c "data-composer-stat" node_modules/usage-popup/dist/client.js     # 0
 ```
 
@@ -585,8 +616,8 @@ change may appear on refresh, but a restart is the reliable path.
 
 Post-restart checks:
 
-- The sidebar foot shows the ledger button above the signed-in account bar.
-- Opening it from New Session / Plugins / any chat shows the panel.
+- The sidebar shows one **Plugin Tools** button; the ledger is one row in it.
+- Choosing the row from New Session / Plugins / any chat opens the panel.
 - Session tab dropdown lists chats with entries/tokens/cost/age; selecting an
   older one shows the `Current chat` pill and `History`.
 - Switching chats while open (no lock) follows the active chat.
@@ -600,7 +631,7 @@ restart.
 
 | Symptom | Likely cause / fix |
 | --- | --- |
-| Plugin absent, no sidebar cell | `inject` or `dsh.client.inject` names wrong; check the web-boot audit. `sessions` must be declared for the module `inject`. |
+| Plugin absent, no Plugin Tools row | `inject` or `dsh.client.inject` names wrong, or the `__DSH_PLUGIN_LAUNCHER_V1__` contract drifted; check the web-boot audit. `sessions` must be declared for the module `inject`. |
 | `usage-popup: failed` at boot | A required service was read without `inject`; a slot name/type is wrong. |
 | Panel opens but totals never move | Host probe `active` but the poll is failing; check `/usage-popup/api/health`. Or the retained session was never opened (`ready` rejected). |
 | Tokens double-counted | `resolveProjectionMode` gate removed, or a host record and a projection row describe the same call. |
@@ -614,15 +645,16 @@ restart.
 
 ## Invariants (do not break)
 
-1. **One entry point.** `sidebar.footer.action` + `shell.overlay`; never add a
-   `usage-popup` cell to `conversation.composer.dock`.
+1. **One entry point.** `plugin-launcher`'s registry + `shell.overlay`; never
+   add a `usage-popup` cell to `sidebar.footer.action` or
+   `conversation.composer.dock`.
 2. **Keep the null `save-token-strip` replacement.**
 3. **Do not replace the native `usage` dock control.**
 4. **Never write projection rows while the host probe is `pending`/`active`.**
 5. **Attribution follows `activeChatId`, not the dropdown selection.**
 6. **A historical selection is a pure ledger slice** (`usage = null`).
 7. **The overlay component stays mounted when closed.**
-8. **`dsh.client.immediately` stays true** so the sidebar cell exists at boot.
+8. **`dsh.client.immediately` stays true** so the Plugin Tools row exists at boot.
 9. **`name` export stays `usage-popup`** (the loader keys on it).
 10. **Keep `files` in `package.json` aligned with the tarball** (`dist/index.js`,
     `dist/client.js`, `dist/host/*.js`, `cordis.patch.yml`) — `npm pack` filters

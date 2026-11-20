@@ -34,8 +34,9 @@ are not duplicated here.
 | --- | --- | --- |
 | [`profiles/desktop/`](./profiles/desktop/OVERVIEW.md) | [`cordis.patch.yml`](./profiles/desktop/cordis.patch.yml) | Active DSH profile config, bundle manifest, and model/preset defaults. |
 | [`presets/architect-preset/`](./presets/architect-preset/OVERVIEW.md) | [`index.js`](./presets/architect-preset/index.js) | Role-split Architect/Worker preset, tool restrictions, and role-based reasoning-effort hooks. |
-| [`plugins/usage-popup/`](./plugins/usage-popup/OVERVIEW.md) | [`src/index.tsx`](./plugins/usage-popup/src/index.tsx) | True-sync token/cost ledger sidebar launcher and root overlay panel. |
-| [`plugins/obsidian-task-sync/`](./plugins/obsidian-task-sync/OVERVIEW.md) | [`src/host.js`](./plugins/obsidian-task-sync/src/host.js) | Obsidian vault SSE bridge, daily checklist widget, and skill-tree canvas. |
+| [`plugins/usage-popup/`](./plugins/usage-popup/OVERVIEW.md) | [`src/index.tsx`](./plugins/usage-popup/src/index.tsx) | True-sync token/cost ledger panel; registers `True-sync ledger` into `plugin-launcher`. |
+| [`plugins/plugin-launcher/`](./plugins/plugin-launcher/OVERVIEW.md) | [`src/index.tsx`](./plugins/plugin-launcher/src/index.tsx) | Unified **Plugin Tools** sidebar button, `shell.overlay` selection modal, and the order-independent tool registry both other plugins use. |
+| [`plugins/obsidian-task-sync/`](./plugins/obsidian-task-sync/OVERVIEW.md) | [`src/host.js`](./plugins/obsidian-task-sync/src/host.js) | Obsidian vault SSE bridge, daily checklist widget, and skill-tree canvas; registers `Obsidian checklist` into `plugin-launcher`. |
 | [`packages/dsh-tier-router/`](./packages/dsh-tier-router/OVERVIEW.md) | [`dsh-tier-router-0.6.0.tgz`](./packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz) | Locally patched `dsh-tier-router@0.6.0` tarball and source patch files. |
 | [`skills/modern-web-guidance/`](./skills/modern-web-guidance/OVERVIEW.md) | [`SKILL.md`](./skills/modern-web-guidance/SKILL.md) | Modern web development skill (`SKILL.md`) and 209 categorized guidance files. |
 
@@ -98,10 +99,12 @@ details documented in [`presets/architect-preset/OVERVIEW.md`](./presets/archite
    "@local/dsh-architect-preset": "link:<repo>/presets/architect-preset",
    "dsh-tier-router": "file:<repo>/packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz",
    "obsidian-task-sync": "file:<repo>/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz",
+   "plugin-launcher": "file:<repo>/plugins/plugin-launcher/plugin-launcher-0.1.0.tgz",
    "usage-popup": "file:<repo>/plugins/usage-popup/usage-popup-0.3.0.tgz"
    ```
 
-   All four artifacts are committed in this repo. Rebuild the plugins from source only if
+   All five dependencies resolve inside this repo (the preset is a `link:`, the
+   rest are committed tarballs). Rebuild the three plugins from source only if
    you change them (`npm run build && npm pack` in each plugin folder — see their
    `OVERVIEW.md`).
 4. **Install the profile dependencies:**
@@ -151,6 +154,11 @@ details documented in [`presets/architect-preset/OVERVIEW.md`](./presets/archite
   then skips only the conflicting preset; all other dsh-ops tools survive.
 - **A `disabled: true` preset row does NOT work.** The preset registry has no `exclude`
   key, so disabling cannot remove an existing preset row; rename/remove the patch file.
+- **One sidebar button.** `plugin-launcher` owns the only `sidebar.footer.action`
+  cell for these plugins. `usage-popup` and `obsidian-task-sync` register tools
+  into `window.__DSH_PLUGIN_LAUNCHER_V1__`; do not re-add their old sidebar
+  registrations, and keep the registry key/version in sync across all three
+  bundles.
 - **Absolute `file:`/`link:` paths** in `profiles/desktop/package.json`,
   `profiles/desktop/pnpm-lock.yaml`, and `plugins/usage-popup/cordis.yml` are
   source-machine paths — update them on a new machine.
@@ -181,10 +189,11 @@ details documented in [`presets/architect-preset/OVERVIEW.md`](./presets/archite
   `.credentials.yaml`/environment secrets you use. Nothing sensitive is in this repo.
 - **Excluded contents:** `node_modules`, `.git` (other than this repo's own),
   `.probe-extract`, `.npm-cache`, `dist`/`build` output (except the committed
-  `plugins/usage-popup/dist/` needed by its restore tarball), `crash-*`, `*.diag.json`,
+  `plugins/usage-popup/dist/` and `plugins/plugin-launcher/dist/` needed by their
+  restore tarballs), `crash-*`, `*.diag.json`,
   `.roster.json`, profile `*.bak-*`/`*.orig-*` backups, `*.log`, `*.sqlite`, `*.db`,
   auth/cookie/credential files, `.env`/`.npmrc`/`.netrc`, and `*.tgz` except the committed
-  restore artifacts (`packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz` and the two
+  restore artifacts (`packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz` and the three
   plugin tarballs).
 
 ## Verification performed for this export
@@ -192,7 +201,9 @@ details documented in [`presets/architect-preset/OVERVIEW.md`](./presets/archite
 - `node presets/architect-preset/smoke.test.mjs` → **exit 0, 52 pass, 0 fail**.
 - `usage-popup` suites: `test/logic.test.mjs` (75), `test/host.test.mjs` (95),
   `test/transport.test.mjs` (58), `test/integration.test.mjs` (55), and
-  `test/client.test.mjs` (23) — all exit 0.
+  `test/client.test.mjs` (26) — all exit 0.
+- `plugin-launcher`: `tests/registry.test.mjs` (25 checks), `tests/client.test.mjs`
+  (bundle/slot smoke), and `tests/modal.test.mjs` (26 checks) — all exit 0.
 - `obsidian-task-sync`: `tests/backend.test.mjs` (22 tests), `tests/bridge.test.mjs`
   (real-HTTP integration), and `tests/client-smoke.mjs` (server-render smoke) — all pass
   after `npm run build`.

@@ -1,10 +1,11 @@
 # Obsidian task sync
 
 A DeepSeek Harness plugin that turns an Obsidian checklist folder into a live,
-interactive task app. A persistent sidebar button opens a floating, draggable
-dark-mode widget with two views: a **daily checklist** and a video-game-style
-**skill tree** canvas. Checking a box rewrites exactly that Markdown line, and
-edits made in Obsidian flow back into the UI within a fraction of a second.
+interactive task app. The unified **Plugin Tools** button in the Harness sidebar
+opens a floating, draggable dark-mode widget with two views: a **daily checklist**
+and a video-game-style **skill tree** canvas. Checking a box rewrites exactly that
+Markdown line, and edits made in Obsidian flow back into the UI within a fraction
+of a second.
 
 ## What it does
 
@@ -24,7 +25,8 @@ edits made in Obsidian flow back into the UI within a fraction of a second.
 - **Two-way live sync** — a debounced `fs.watch` stream on the active file pushes
   external edits (including agent edits) to the UI. A 6-second fallback poll
   keeps the widget converging if SSE is unavailable.
-- **In-app floating widget** — the sidebar action toggles a borderless panel that
+- **In-app floating widget** — the `Obsidian checklist` row in the Plugin Tools
+  menu toggles a borderless panel that
   is fixed above the Harness shell at a high z-index. Only its title bar is a
   drag handle; the body keeps normal pointer, click and focus behavior. The card
   opts out of the desktop caption drag region and its position is clamped below
@@ -102,15 +104,16 @@ npm pack
 ```
 
 The last command produces `obsidian-task-sync-0.1.0.tgz`. Install that tarball as
-a profile bundle with Plugin Manager, then enable **Obsidian task sync**. The
-sidebar action appears beside Settings.
+a profile bundle with Plugin Manager, then enable **Obsidian task sync**. Its
+**Obsidian checklist** row appears in the unified Plugin Tools menu beside Settings.
 
 Requires DeepSeek Harness `^0.2.2-rc.1` for the Web GUI, React 18, and Node 20+.
 
 ## First run
 
-Click the sidebar checklist button. The floating widget asks for the **absolute
-path** of the Obsidian checklist folder, for example:
+Open **Plugin Tools** in the sidebar and choose **Obsidian checklist**. The
+floating widget asks for the **absolute path** of the Obsidian checklist folder,
+for example:
 
 ```text
 C:\Users\you\Obsidian\Checklists
@@ -216,7 +219,7 @@ Principal Engineer.
 
 ```text
 src/host.js       Host bridge, checklist + skill-tree parsers, watcher, SSE
-src/client.tsx    React UI, sidebar toggle, draggable overlay, tree canvas, bridge client
+src/client.tsx    React UI, plugin-launcher tool registration, draggable overlay, tree canvas, bridge client
 tests/            Node tests for parsing, exact-line writes, tree layout, and bundle loading
 scripts/build.mjs TypeScript transpile + Harness client-module wrapper
 ```

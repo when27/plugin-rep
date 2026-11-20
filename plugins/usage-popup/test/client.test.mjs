@@ -2,8 +2,9 @@
 //
 // The real TypeScript source is transpiled in memory (no build output) and
 // evaluated with browser stubs, then `apply(ctx)` is called against a fake slot
-// service. This locks in the entry-point contract: one global sidebar cell,
-// one root overlay, and no custom control in the chat footer.
+// service. This locks in the entry-point contract: no sidebar cell of its own,
+// one root overlay, one `plugin-launcher` tool registration, and only the null
+// save-token composer cell.
 import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -185,14 +186,16 @@ check(overlay?.options.id === 'usage-popup-ledger', 'overlay id is usage-popup-l
 check(typeof overlay?.component === 'function', 'overlay factory is a component')
 
 const sidebar = registrations.filter((row) => row.options.name === 'sidebar.footer.action')
-check(sidebar.length === 1, 'registers exactly one sidebar.footer.action')
-check(sidebar[0]?.options.id === 'usage-popup', 'sidebar id is usage-popup')
-check(sidebar[0]?.options.order === 2, 'sidebar order is 2 (above the account bar)')
-check(
-  typeof sidebar[0]?.options.label === 'function' &&
-    sidebar[0].options.label() === 'True-sync ledger',
-  'sidebar label names the ledger',
-)
+check(sidebar.length === 0, 'no longer mounts its own sidebar.footer.action')
+
+const launcherRegistry = windowStub.__DSH_PLUGIN_LAUNCHER_V1__
+check(launcherRegistry !== undefined, 'creates/uses the plugin-launcher tool registry')
+const launcherTools = launcherRegistry?.getSnapshot() ?? []
+check(launcherTools.length === 1, 'registers exactly one plugin-launcher tool')
+check(launcherTools[0]?.id === 'usage-popup.ledger', 'tool id is usage-popup.ledger')
+check(launcherTools[0]?.label === 'True-sync ledger', 'tool label names the ledger')
+check(launcherTools[0]?.badge === 'LIVE', 'tool carries the LIVE badge')
+check(typeof launcherTools[0]?.onOpen === 'function', 'tool exposes an open callback')
 
 const dock = registrations.filter((row) => row.options.name === 'conversation.composer.dock')
 check(dock.length === 1, 'only the save-token blank remains in the composer dock')

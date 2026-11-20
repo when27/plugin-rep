@@ -29,9 +29,12 @@ importers:
       obsidian-task-sync:
         specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz
         version: file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz
+      plugin-launcher:
+        specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/plugins/plugin-launcher/plugin-launcher-0.1.0.tgz
+        version: file:../../../Documents/deepseek-harness/default-workspace/plugins/plugin-launcher/plugin-launcher-0.1.0.tgz
       usage-popup:
-        specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/usage-popup/usage-popup-0.1.2.tgz
-        version: file:../../../Documents/deepseek-harness/default-workspace/usage-popup/usage-popup-0.1.2.tgz
+        specifier: file:C:/Users/Administrator/Documents/deepseek-harness/default-workspace/plugins/usage-popup/usage-popup-0.3.0.tgz
+        version: file:../../../Documents/deepseek-harness/default-workspace/plugins/usage-popup/usage-popup-0.3.0.tgz
 
 packages:
 
@@ -258,7 +261,16 @@ packages:
         optional: true
 
   obsidian-task-sync@file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz:
-    resolution: {integrity: sha512-hi6pp5ENAi2wXjNSkW+tYswiE9y520rnZSxcuKauosVWVE6Cz/PbZbkTVvSS4Q09jdTiU1yPgo+7t1QoIFmlmA==, tarball: file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz}
+    resolution: {integrity: sha512-Xmpo2Or09kliB1RxuY1LEnbxPicUdeoTsK3BZFYlr2x+3ppy8KIAMKsMsIIdsYwGKYuMJAm8RC3Pc2LifN7djg==, tarball: file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz}
+    version: 0.1.0
+    engines: {dsh: ^0.2.2-rc.1, node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ~4.1.0
+      react: ^18.2.0
+      react-dom: ^18.2.0
+
+  plugin-launcher@file:../../../Documents/deepseek-harness/default-workspace/plugins/plugin-launcher/plugin-launcher-0.1.0.tgz:
+    resolution: {integrity: sha512-ecMjzZK5uZbE7iy0QGUDkxetg3NyCLCaSDVr/NkawaiO0YMwJqRUIbbBTufxssdve/4zgDnTrjTESCNaRkIyVA==, tarball: file:../../../Documents/deepseek-harness/default-workspace/plugins/plugin-launcher/plugin-launcher-0.1.0.tgz}
     version: 0.1.0
     engines: {dsh: ^0.2.2-rc.1, node: '>=20'}
     peerDependencies:
@@ -273,9 +285,9 @@ packages:
   tree-sitter-wasms@0.1.13:
     resolution: {integrity: sha512-wT+cR6DwaIz80/vho3AvSF0N4txuNx/5bcRKoXouOfClpxh/qqrF4URNLQXbbt8MaAxeksZcZd1j8gcGjc+QxQ==}
 
-  usage-popup@file:../../../Documents/deepseek-harness/default-workspace/usage-popup/usage-popup-0.1.2.tgz:
-    resolution: {integrity: sha512-k2gnhMJq7BhyNunce8r7abCFX3RnJsHkCDcgfeQ+i3Wdz1coxA28gJ8tktV4v9wgVa4evY4JyQLLIFgLd9iUMQ==, tarball: file:../../../Documents/deepseek-harness/default-workspace/usage-popup/usage-popup-0.1.2.tgz}
-    version: 0.1.2
+  usage-popup@file:../../../Documents/deepseek-harness/default-workspace/plugins/usage-popup/usage-popup-0.3.0.tgz:
+    resolution: {integrity: sha512-yhsV4ubfu8I3mt65JP8O8zCFrXHEBe2P8kcjRNVpcvQMisgHjIM9hciCd8FL0B4xEcIQmnDuZLRz7NESr/rWkw==, tarball: file:../../../Documents/deepseek-harness/default-workspace/plugins/usage-popup/usage-popup-0.3.0.tgz}
+    version: 0.3.0
     engines: {dsh: ^0.2.2-rc.1}
     peerDependencies:
       '@deepseek-ai/cordis': ~4.1.0
@@ -443,11 +455,13 @@ snapshots:
 
   obsidian-task-sync@file:../../../Documents/deepseek-harness/default-workspace/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz: {}
 
+  plugin-launcher@file:../../../Documents/deepseek-harness/default-workspace/plugins/plugin-launcher/plugin-launcher-0.1.0.tgz: {}
+
   readdirp@4.1.2: {}
 
   tree-sitter-wasms@0.1.13: {}
 
-  usage-popup@file:../../../Documents/deepseek-harness/default-workspace/usage-popup/usage-popup-0.1.2.tgz: {}
+  usage-popup@file:../../../Documents/deepseek-harness/default-workspace/plugins/usage-popup/usage-popup-0.3.0.tgz: {}
 
   web-tree-sitter@0.25.10: {}
 

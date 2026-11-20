@@ -1,11 +1,13 @@
 # usage-popup — True-sync ledger notes
 
-> **Current architecture (2026-11-18).** The sole entry point is the global
-> sidebar (`sidebar.footer.action`, order 2, beside the Obsidian checklist
-> launcher above the signed-in account bar); the panel itself is mounted at the
-> root in `shell.overlay`. The plugin no longer contributes a control to
-> `conversation.composer.dock`, so the chat footer keeps only the DSH-native
-> token tracker. The Session tab has a chat selector built from the ledger:
+> **Current architecture (2026-11-19).** The sole entry point is `plugin-launcher`'s
+> unified **Plugin Tools** button in the global sidebar; this plugin registers
+> `usage-popup.ledger` (label `True-sync ledger`, order 20) into its shared
+> `window.__DSH_PLUGIN_LAUNCHER_V1__` registry and the panel itself is mounted at
+> the root in `shell.overlay`. The plugin contributes **nothing** to
+> `sidebar.footer.action` or `conversation.composer.dock`, so the sidebar keeps
+> one short button and the chat footer keeps only the DSH-native token tracker.
+> The Session tab has a chat selector built from the ledger:
 > it follows the app's active chat automatically (the Session retained with
 > source `mainView`, and only while no global panel is open), falls back to
 > the most recently active ledger chat on non-chat screens, and lets the user
@@ -14,8 +16,8 @@
 > context; do not re-introduce a chat-footer trigger.
 >
 > The open state lives in `createLedgerController` (`usage-popup.ledger.open.v1`,
-> closed by default) because the sidebar button and the overlay are separate
-> slot occupants. Live metrics for the root-scoped panel come from
+> closed by default) because the registry tool callback and the overlay are
+> separate mounts. Live metrics for the root-scoped panel come from
 > `ctx.sessions.retain(activeChatId, { source: 'usagePopup' })` and the
 > generation's `projections.faceOf('tokenUsage' | 'modelSelection')`; historical
 > chats are pure ledger slices.

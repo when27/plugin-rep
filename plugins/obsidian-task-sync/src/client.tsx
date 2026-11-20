@@ -1,10 +1,10 @@
 // obsidian-task-sync — Client half.
 //
-// A persistent sidebar launcher plus a floating checklist widget. The DSH
-// desktop shell denies renderer pop-outs, so the widget is an in-app overlay: a
-// draggable, high-z-index panel rendered into the main Harness window. The
-// browser never imports fs. Every read and write still crosses the same-origin
-// JSON bridge owned by the Host half.
+// Registers one tool into plugin-launcher's unified Plugin Tools menu and hosts
+// a floating checklist widget. The DSH desktop shell denies renderer pop-outs,
+// so the widget is an in-app overlay: a draggable, high-z-index panel rendered
+// into the main Harness window. The browser never imports fs. Every read and
+// write still crosses the same-origin JSON bridge owned by the Host half.
 
 import {
   Fragment,
@@ -63,11 +63,89 @@ const ALLOWED_OPS = new Set([
 ])
 
 // ---------------------------------------------------------------------------
+// plugin-launcher registration bridge.
+//
+// The unified Plugin Tools button is a sibling client bundle, so this plugin
+// cannot import it. Both halves pin the same versioned global registry: the
+// first bundle to evaluate creates it, the other adopts it. Keep this contract
+// byte-compatible with `plugins/plugin-launcher/src/index.tsx`.
+// ---------------------------------------------------------------------------
+
+const LAUNCHER_REGISTRY_KEY = '__DSH_PLUGIN_LAUNCHER_V1__'
+
+function launcherRegistry(host = typeof window === 'undefined' ? {} : window) {
+  const existing = host[LAUNCHER_REGISTRY_KEY]
+  if (
+    existing !== null &&
+    typeof existing === 'object' &&
+    existing.version === 1 &&
+    typeof existing.register === 'function' &&
+    typeof existing.getSnapshot === 'function' &&
+    typeof existing.subscribe === 'function'
+  ) {
+    return existing
+  }
+  const tools = new Map()
+  const listeners = new Set()
+  let snapshot = []
+  const emit = () => {
+    snapshot = Array.from(tools.values()).sort((left, right) => {
+      const order = (left.order ?? 0) - (right.order ?? 0)
+      return order !== 0 ? order : left.label.localeCompare(right.label)
+    })
+    for (const listener of Array.from(listeners)) {
+      try {
+        listener()
+      } catch {
+        /* a broken subscriber must not break registration */
+      }
+    }
+  }
+  const registry = {
+    version: 1,
+    register(tool) {
+      tools.set(tool.id, tool)
+      emit()
+      return () => {
+        if (tools.get(tool.id) !== tool) return
+        tools.delete(tool.id)
+        emit()
+      }
+    },
+    getSnapshot: () => snapshot,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    get: (id) => tools.get(id) ?? null,
+    select(id) {
+      const tool = tools.get(id)
+      if (tool === undefined) return false
+      tool.onOpen()
+      return true
+    },
+  }
+  try {
+    Object.defineProperty(host, LAUNCHER_REGISTRY_KEY, {
+      value: registry,
+      configurable: true,
+      enumerable: false,
+    })
+  } catch {
+    host[LAUNCHER_REGISTRY_KEY] = registry
+  }
+  return registry
+}
+
+// ---------------------------------------------------------------------------
 // Locale
 // ---------------------------------------------------------------------------
 
 const en = {
   open: 'Open Obsidian checklist',
+  toolDescription: 'Daily checklist, focus timer and skill tree, synced with your vault',
   widget: 'Obsidian checklist',
   setupTitle: 'Connect your Obsidian folder',
   setupBody:
@@ -181,6 +259,7 @@ const en = {
 
 const zh = {
   open: '打开 Obsidian 清单',
+  toolDescription: '每日清单、专注计时和技能树，与 Obsidian 仓库实时同步',
   widget: 'Obsidian 清单',
   setupTitle: '连接 Obsidian 文件夹',
   setupBody: '选择每日清单 Markdown 文件所在的文件夹。Harness 只会在此电脑上读写这些文件。',
@@ -1586,79 +1665,6 @@ function RolloverGlyph({ size = 13 }) {
       strokeLinejoin: 'round',
     }),
   )
-}
-
-// ---------------------------------------------------------------------------
-// Sidebar launcher
-// ---------------------------------------------------------------------------
-
-function SidebarButton({ wide, t, open, onToggle }) {
-  const iconSize = wide ? 15 : 17
-  const active = open === true
-  const idleBackground = 'transparent'
-  const idleColor = 'var(--dsw-alias-label-secondary, inherit)'
-  const activeBackground = 'rgba(126, 224, 189, 0.14)'
-  const activeColor = '#7ee0bd'
-  const style = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: wide ? 'flex-start' : 'center',
-    gap: 8,
-    width: wide ? '100%' : 32,
-    height: 32,
-    flex: '0 1 auto',
-    minWidth: 0,
-    padding: wide ? '0 9px' : 0,
-    border: 0,
-    borderRadius: 8,
-    background: active ? activeBackground : idleBackground,
-    color: active ? activeColor : idleColor,
-    font: 'inherit',
-    fontSize: 12,
-    lineHeight: '18px',
-    cursor: 'pointer',
-    textAlign: 'left',
-  }
-  const labelStyle = {
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    color: 'inherit',
-  }
-  return createElement(
-    'button',
-    {
-      type: 'button',
-      style,
-      title: active ? t('hideWidget') : t('open'),
-      'aria-label': active ? t('hideWidget') : t('open'),
-      'aria-pressed': active,
-      onClick: onToggle,
-      onMouseEnter: (event) => {
-        event.currentTarget.style.background = active
-          ? activeBackground
-          : 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,.14))'
-        event.currentTarget.style.color = active ? activeColor : 'var(--dsw-alias-label-primary, inherit)'
-      },
-      onMouseLeave: (event) => {
-        event.currentTarget.style.background = active ? activeBackground : idleBackground
-        event.currentTarget.style.color = active ? activeColor : idleColor
-      },
-    },
-    createElement(ChecklistGlyph, { size: iconSize }),
-    wide ? createElement('span', { style: labelStyle }, t('open')) : null,
-  )
-}
-
-function SidebarLauncher({ wide, t, controller }) {
-  const open = useWidgetOpen(controller)
-  return createElement(SidebarButton, {
-    wide,
-    t,
-    open,
-    onToggle: () => controller.toggle(),
-  })
 }
 
 // ---------------------------------------------------------------------------
@@ -4237,16 +4243,21 @@ export function apply(ctx) {
     ),
   )
 
-  ctx.slots.inject('sidebar.footer.action', () =>
-    ctx.slots.register(
-      {
-        name: 'sidebar.footer.action',
-        id: 'obsidian-task-sync',
-        order: 1,
-        label: () => t('open'),
-      },
-      (props) => createElement(SidebarLauncher, { wide: props.wide === true, t, controller }),
-    ),
+  // The single visible entry point is plugin-launcher's global button. Register
+  // the widget as a selectable tool; the effect disposer removes the row on
+  // hot-reload or plugin unload.
+  ctx.effect(
+    () =>
+      launcherRegistry().register({
+        id: 'obsidian-task-sync.checklist',
+        label: t('widget'),
+        description: t('toolDescription'),
+        badge: 'VAULT',
+        order: 10,
+        icon: createElement(ChecklistGlyph, { size: 18 }),
+        onOpen: () => controller.setOpen(true),
+      }),
+    'obsidian-task-sync: plugin-launcher tool',
   )
 }
 

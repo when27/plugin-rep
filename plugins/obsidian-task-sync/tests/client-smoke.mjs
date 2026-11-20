@@ -77,21 +77,24 @@ exports.apply(ctx)
 
 const sidebar = registered.find((entry) => entry.options.name === 'sidebar.footer.action')
 const overlay = registered.find((entry) => entry.options.name === 'shell.overlay')
-assert.ok(sidebar, 'sidebar.footer.action was not registered')
+assert.equal(sidebar, undefined, 'the plugin no longer mounts its own sidebar.footer.action')
 assert.ok(overlay, 'shell.overlay was not registered')
-assert.equal(sidebar.options.id, 'obsidian-task-sync')
 assert.equal(overlay.options.id, 'obsidian-task-sync-widget')
-assert.equal(typeof sidebar.component, 'function')
 assert.equal(typeof overlay.component, 'function')
 
-const markup = renderToStaticMarkup(React.createElement(sidebar.component, { wide: true }))
-assert.match(markup, /<button/)
-assert.match(markup, /aria-pressed="false"/)
-assert.match(markup, /Open Obsidian checklist/)
-assert.doesNotMatch(markup, /undefined/)
+// The widget is reachable only through plugin-launcher's unified button now.
+const launcherRegistry = globalThis.window.__DSH_PLUGIN_LAUNCHER_V1__
+assert.ok(launcherRegistry, 'plugin-launcher registry was not created')
+const launcherTools = launcherRegistry.getSnapshot()
+assert.equal(launcherTools.length, 1)
+assert.equal(launcherTools[0].id, 'obsidian-task-sync.checklist')
+assert.equal(launcherTools[0].label, 'Obsidian checklist')
+assert.equal(launcherTools[0].description, 'Daily checklist, focus timer and skill tree, synced with your vault')
+assert.equal(launcherTools[0].badge, 'VAULT')
+assert.equal(typeof launcherTools[0].onOpen, 'function')
 
-// The widget layer is mounted globally but renders nothing until the sidebar
-// button opens it. Server rendering exercises the closed branch.
+// The widget layer is mounted globally but renders nothing until its tool
+// opens it. Server rendering exercises the closed branch.
 assert.equal(renderToStaticMarkup(React.createElement(overlay.component)), '')
 
 // The built bundle must not reach for popup or cross-window primitives.
@@ -223,4 +226,5 @@ for (const cleanup of disposers.reverse()) {
   if (typeof cleanup === 'function') cleanup()
 }
 await new Promise((resolve) => setTimeout(resolve, 20))
-console.log('client smoke test passed:', markup.slice(0, 120), '…')
+assert.equal(launcherRegistry.getSnapshot().length, 0, 'dispose removes the plugin-launcher tool')
+console.log('client smoke test passed')

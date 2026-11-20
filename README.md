@@ -1,7 +1,7 @@
 # DeepSeek Harness Setup Export (`plugin-rep`)
 
 This repository is a secret-scrubbed export of a working **DeepSeek Harness (DSH)**
-setup: a desktop profile configuration, a custom **Architect** agent preset, two local
+setup: a desktop profile configuration, a custom **Architect** agent preset, three local
 plugins, a locally patched `dsh-tier-router` build, the patch files that produced it,
 and the **modern-web-guidance** skill. Its purpose is to let you restore and reproduce
 this setup on another machine.
@@ -22,8 +22,9 @@ build/test commands, and caveats). This README is the human-facing setup guide;
 | `profiles/desktop/` | [OVERVIEW.md](profiles/desktop/OVERVIEW.md) | The active DSH profile: plugin composition patch, manifest, lockfile, compatibility pin, and model/preset defaults. |
 | `profiles/global/` | [agent_rules.md](profiles/global/agent_rules.md) | Human-readable copy of the master/subagent operating rules (not auto-loaded; documented in the profile dictionary). |
 | `presets/architect-preset/` | [OVERVIEW.md](presets/architect-preset/OVERVIEW.md) | Source of the **Architect** agent preset: restriction plugin, preset definition, manifest, and dependency-free smoke test. |
-| `plugins/usage-popup/` | [OVERVIEW.md](plugins/usage-popup/OVERVIEW.md) | True-sync token/cost ledger: host collector + `/usage-popup/api/*`, sidebar launcher, and root overlay panel. |
-| `plugins/obsidian-task-sync/` | [OVERVIEW.md](plugins/obsidian-task-sync/OVERVIEW.md) | Obsidian vault SSE bridge, daily checklist widget, and skill-tree canvas. |
+| `plugins/usage-popup/` | [OVERVIEW.md](plugins/usage-popup/OVERVIEW.md) | True-sync token/cost ledger: host collector + `/usage-popup/api/*`, root overlay panel, registered as a Plugin Tools row. |
+| `plugins/plugin-launcher/` | [OVERVIEW.md](plugins/plugin-launcher/OVERVIEW.md) | Unified **Plugin Tools** sidebar button + `shell.overlay` selection modal and the order-independent tool registry the other plugins register into. |
+| `plugins/obsidian-task-sync/` | [OVERVIEW.md](plugins/obsidian-task-sync/OVERVIEW.md) | Obsidian vault SSE bridge, daily checklist widget, and skill-tree canvas, registered as a Plugin Tools row. |
 | `packages/dsh-tier-router/` | [OVERVIEW.md](packages/dsh-tier-router/OVERVIEW.md) | The patched `dsh-tier-router@0.6.0` tarball plus the two source patches that produced it. |
 | `skills/modern-web-guidance/` | [OVERVIEW.md](skills/modern-web-guidance/OVERVIEW.md) | A DSH skill manifest plus 209 categorized modern-web guidance files under `guides/`. |
 
@@ -45,8 +46,14 @@ The source machine also keeps the original working directories (`architect-prese
    "@local/dsh-architect-preset": "link:<repo>/presets/architect-preset",
    "dsh-tier-router": "file:<repo>/packages/dsh-tier-router/dsh-tier-router-0.6.0.tgz",
    "obsidian-task-sync": "file:<repo>/plugins/obsidian-task-sync/obsidian-task-sync-0.1.0.tgz",
+   "plugin-launcher": "file:<repo>/plugins/plugin-launcher/plugin-launcher-0.1.0.tgz",
    "usage-popup": "file:<repo>/plugins/usage-popup/usage-popup-0.3.0.tgz"
    ```
+
+   The three plugin tarballs are committed. If you change plugin source, rebuild and
+   repack it before installing: `npm run build && npm pack` in
+   `plugins/plugin-launcher`, `plugins/usage-popup`, or `plugins/obsidian-task-sync`
+   (each `OVERVIEW.md` lists its exact commands and tests).
 
 4. Install the profile dependencies:
 
@@ -74,6 +81,7 @@ The full step-by-step procedure, caveats, and verification results live in
   restore/restart procedure, caveats, and secret/exclusion notes.
 - [profiles/desktop/OVERVIEW.md](profiles/desktop/OVERVIEW.md) — profile dictionary.
 - [presets/architect-preset/OVERVIEW.md](presets/architect-preset/OVERVIEW.md) — preset dictionary.
+- [plugins/plugin-launcher/OVERVIEW.md](plugins/plugin-launcher/OVERVIEW.md) — unified Plugin Tools launcher dictionary.
 - [plugins/usage-popup/OVERVIEW.md](plugins/usage-popup/OVERVIEW.md) — usage-ledger dictionary.
 - [plugins/obsidian-task-sync/OVERVIEW.md](plugins/obsidian-task-sync/OVERVIEW.md) — Obsidian plugin dictionary.
 - [packages/dsh-tier-router/OVERVIEW.md](packages/dsh-tier-router/OVERVIEW.md) — router tarball/patch dictionary.

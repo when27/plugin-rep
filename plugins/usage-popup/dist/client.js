@@ -31,6 +31,95 @@ window.__ModuleLoader__.load({
     // without declaring it throws `cannot get property "slots" without inject`
     // and the web-boot audit reports `usage-popup: failed`.
     exports.inject = ['slots', 'sessions'];
+    // ---------------------------------------------------------------------------
+    // plugin-launcher registration bridge.
+    //
+    // The launcher is a sibling client bundle, not an import: both halves pin the
+    // same versioned global registry. Whichever bundle the client module loader
+    // evaluates first creates it; the other adopts it, so registration is
+    // order-independent. Keep this contract byte-compatible with
+    // `plugins/plugin-launcher/src/index.tsx`.
+    // ---------------------------------------------------------------------------
+    const LAUNCHER_REGISTRY_KEY = '__DSH_PLUGIN_LAUNCHER_V1__';
+    function launcherRegistry(host = typeof window === 'undefined' ? {} : window) {
+        const existing = host[LAUNCHER_REGISTRY_KEY];
+        if (existing !== null &&
+            typeof existing === 'object' &&
+            existing.version === 1 &&
+            typeof existing.register === 'function' &&
+            typeof existing.getSnapshot === 'function' &&
+            typeof existing.subscribe === 'function') {
+            return existing;
+        }
+        const tools = new Map();
+        const listeners = new Set();
+        let snapshot = [];
+        const emit = () => {
+            snapshot = Array.from(tools.values()).sort((left, right) => {
+                const order = (left.order ?? 0) - (right.order ?? 0);
+                return order !== 0 ? order : left.label.localeCompare(right.label);
+            });
+            for (const listener of Array.from(listeners)) {
+                try {
+                    listener();
+                }
+                catch {
+                    /* a broken subscriber must not break registration */
+                }
+            }
+        };
+        const registry = {
+            version: 1,
+            register(tool) {
+                tools.set(tool.id, tool);
+                emit();
+                return () => {
+                    if (tools.get(tool.id) !== tool)
+                        return;
+                    tools.delete(tool.id);
+                    emit();
+                };
+            },
+            getSnapshot: () => snapshot,
+            subscribe(listener) {
+                listeners.add(listener);
+                return () => {
+                    listeners.delete(listener);
+                };
+            },
+            get: (id) => tools.get(id) ?? null,
+            select(id) {
+                const tool = tools.get(id);
+                if (tool === undefined)
+                    return false;
+                tool.onOpen();
+                return true;
+            },
+        };
+        try {
+            Object.defineProperty(host, LAUNCHER_REGISTRY_KEY, {
+                value: registry,
+                configurable: true,
+                enumerable: false,
+            });
+        }
+        catch {
+            host[LAUNCHER_REGISTRY_KEY] = registry;
+        }
+        return registry;
+    }
+    /** Register this plugin's tool, returning the unregister disposer. */
+    function registerLauncherTool(tool) {
+        return launcherRegistry().register(tool);
+    }
+    /** Run a registration on the Cordis effect scope when the client provides one. */
+    function effectOnce(ctx, callback, label) {
+        const effect = ctx.effect;
+        if (typeof effect === 'function')
+            effect.call(ctx, callback, label);
+        else
+            callback();
+    }
     /**
      * DeepSeek's `outputTokens` normally already includes reasoning tokens. If a
      * source reports only reasoning, bill that; if it reports both, never add them
@@ -70,15 +159,19 @@ window.__ModuleLoader__.load({
         // every column, so the panel is reachable from any screen — not only from an
         // open conversation.
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'usage-popup-ledger', order: 110 }, (props) => (0, react_1.createElement)(LedgerOverlay, { ...props, controller })));
-        // The single visible entry point: one cell in the sidebar's bottom utility
-        // section, above the signed-in account bar (same pattern and order domain as
-        // the Obsidian checklist launcher).
-        ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
-            name: 'sidebar.footer.action',
-            id: 'usage-popup',
-            order: 2,
-            label: () => SIDEBAR_LABEL,
-        }, (props) => (0, react_1.createElement)(SidebarLauncher, { wide: props.wide === true, controller })));
+        // The single visible entry point is `plugin-launcher`'s global sidebar
+        // button. Register the ledger as one of its selectable tools; the returned
+        // disposer keeps Cordis hot-reloads and plugin unloads from leaving a stale
+        // row behind.
+        effectOnce(ctx, () => registerLauncherTool({
+            id: 'usage-popup.ledger',
+            label: 'True-sync ledger',
+            description: 'Token, cost and balance ledger for every chat',
+            badge: 'LIVE',
+            order: 20,
+            icon: (0, react_1.createElement)(LedgerGlyph, { size: 18 }),
+            onOpen: () => controller.setOpen(true),
+        }), 'usage-popup: plugin-launcher tool');
         // dsh-plugin-save-token's composer strip now lives inside this panel (the
         // "Token saver" face). Replace its dock cell with an empty component at the
         // same id + order so the saver UI costs no extra composer space; the
@@ -92,11 +185,10 @@ window.__ModuleLoader__.load({
         }, () => null));
     }
     // ---------------------------------------------------------------------------
-    // Launcher controller. The sidebar button and the root overlay are separate
-    // slot occupants, so open state lives in one small controller shared through
-    // `apply` instead of React context (the two mounts have no common ancestor).
+    // Launcher controller. The Plugin Tools menu and the root overlay are separate
+    // mounts with no common ancestor, so open state lives in one small controller
+    // shared through `apply` instead of React context.
     // ---------------------------------------------------------------------------
-    const SIDEBAR_LABEL = 'True-sync ledger';
     /** New key so a previously "always visible" dock HUD does not start open. */
     const OPEN_KEY = 'usage-popup.ledger.open.v1';
     function createLedgerController(ctx) {
@@ -147,64 +239,6 @@ window.__ModuleLoader__.load({
     }
     function LedgerGlyph({ size = 15 }) {
         return ((0, jsx_runtime_1.jsxs)("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", style: { flex: '0 0 auto', display: 'block' }, children: [(0, jsx_runtime_1.jsx)("path", { d: "M5 3.5h11.5L20 7v13.5H5z" }), (0, jsx_runtime_1.jsx)("path", { d: "M8.5 9.5h8" }), (0, jsx_runtime_1.jsx)("path", { d: "M8.5 13h8" }), (0, jsx_runtime_1.jsx)("path", { d: "M8.5 16.5h5" })] }));
-    }
-    /**
-     * One sidebar cell. Styling and geometry deliberately follow the Obsidian
-     * checklist launcher: a 32px row that collapses to a 32px square in the rail,
-     * themed with host alias tokens and an accent tint while its panel is open.
-     */
-    function SidebarLedgerButton({ wide, open, onToggle, }) {
-        const iconSize = wide ? 15 : 17;
-        const idleBackground = 'transparent';
-        const idleColor = 'var(--dsw-alias-label-secondary, inherit)';
-        const activeBackground = 'rgba(126, 224, 189, 0.14)';
-        const activeColor = '#7ee0bd';
-        const style = {
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: wide ? 'flex-start' : 'center',
-            gap: 8,
-            width: wide ? '100%' : 32,
-            height: 32,
-            flex: '0 1 auto',
-            minWidth: 0,
-            padding: wide ? '0 9px' : 0,
-            border: 0,
-            borderRadius: 8,
-            background: open ? activeBackground : idleBackground,
-            color: open ? activeColor : idleColor,
-            font: 'inherit',
-            fontSize: 12,
-            lineHeight: '18px',
-            cursor: 'pointer',
-            textAlign: 'left',
-        };
-        const labelStyle = {
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            color: 'inherit',
-        };
-        return ((0, jsx_runtime_1.jsxs)("button", { type: "button", style: style, title: open ? `Hide ${SIDEBAR_LABEL}` : `Open ${SIDEBAR_LABEL}`, "aria-label": open ? `Hide ${SIDEBAR_LABEL}` : `Open ${SIDEBAR_LABEL}`, "aria-pressed": open, onClick: onToggle, onMouseEnter: (event) => {
-                event.currentTarget.style.background = open
-                    ? activeBackground
-                    : 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,.14))';
-                event.currentTarget.style.color = open
-                    ? activeColor
-                    : 'var(--dsw-alias-label-primary, inherit)';
-            }, onMouseLeave: (event) => {
-                event.currentTarget.style.background = open ? activeBackground : idleBackground;
-                event.currentTarget.style.color = open ? activeColor : idleColor;
-            }, children: [(0, jsx_runtime_1.jsx)(LedgerGlyph, { size: iconSize }), wide ? (0, jsx_runtime_1.jsx)("span", { style: labelStyle, children: SIDEBAR_LABEL }) : null] }));
-    }
-    function SidebarLauncher({ wide, controller, }) {
-        const open = useLedgerOpen(controller);
-        return (0, react_1.createElement)(SidebarLedgerButton, {
-            wide,
-            open,
-            onToggle: () => controller.toggle(),
-        });
     }
     function LedgerOverlay(props) {
         const open = useLedgerOpen(props.controller);
