@@ -1,0 +1,36 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Users\Administrator\AppData\Roaming\npm\node_modules\npm\bin\npm-cli.js
+1 info using npm@12.0.2
+2 info using node@v24.18.0
+3 silly config load:file:C:\Users\Administrator\AppData\Roaming\npm\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\Administrator\Documents\deepseek-harness\default-workspace\usage-popup\.npmrc
+5 silly config load:file:C:\Users\Administrator\.npmrc
+6 silly config load:file:C:\Users\Administrator\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm pack
+8 verbose argv "pack" "--cache" ".npm-cache"
+9 verbose logfile logs-max:10 dir:C:\Users\Administrator\Documents\deepseek-harness\default-workspace\usage-popup\.npm-cache\_logs\2026-11-09T16_15_16_316Z-
+10 verbose logfile C:\Users\Administrator\Documents\deepseek-harness\default-workspace\usage-popup\.npm-cache\_logs\2026-11-09T16_15_16_316Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:2348810240 maxSize:587202560 maxEntrySize:293601280
+13 notice
+14 notice package: usage-popup@0.1.0
+15 notice Tarball Contents
+16 notice 377B cordis.patch.yml
+16 notice 132.9kB dist/client.js
+16 notice 98B dist/index.js
+16 notice 1.0kB package.json
+17 notice Tarball Details
+18 notice name: usage-popup
+19 notice version: 0.1.0
+20 notice filename: usage-popup-0.1.0.tgz
+21 notice package size: 29.2 kB
+22 notice unpacked size: 134.4 kB
+23 notice shasum: e3490ab2dfa3aa599d6126a49b991ffc508561b6
+24 notice integrity: sha512-SAxcNhKpXKqLj[...]WW1F/o+rMElmQ==
+25 notice total files: 4
+26 notice
+27 verbose cwd C:\Users\Administrator\Documents\deepseek-harness\default-workspace\usage-popup
+28 verbose os Windows_NT 10.0.26200
+29 verbose node v24.18.0
+30 verbose npm  v12.0.2
+31 verbose exit 0
+32 info ok

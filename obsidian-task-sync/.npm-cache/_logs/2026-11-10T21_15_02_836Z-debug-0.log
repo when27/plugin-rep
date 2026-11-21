@@ -1,0 +1,44 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Users\Administrator\AppData\Roaming\npm\node_modules\npm\bin\npm-cli.js
+1 info using npm@12.0.2
+2 info using node@v24.18.0
+3 silly config load:file:C:\Users\Administrator\AppData\Roaming\npm\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\Administrator\Documents\deepseek-harness\default-workspace\obsidian-task-sync\.npmrc
+5 silly config load:file:C:\Users\Administrator\.npmrc
+6 silly config load:file:C:\Users\Administrator\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm pack
+8 verbose argv "pack"
+9 verbose logfile logs-max:10 dir:C:\Users\Administrator\Documents\deepseek-harness\default-workspace\obsidian-task-sync\.npm-cache\_logs\2026-11-10T21_15_02_836Z-
+10 verbose logfile C:\Users\Administrator\Documents\deepseek-harness\default-workspace\obsidian-task-sync\.npm-cache\_logs\2026-11-10T21_15_02_836Z-debug-0.log
+11 silly logfile start cleaning logs, removing 1 files
+12 silly logfile done cleaning log files
+13 notice run obsidian-task-sync@0.1.0 prepack
+14 notice run npm run build
+15 silly packumentCache heap:2348810240 maxSize:587202560 maxEntrySize:293601280
+16 verbose shrinkwrap failed to load node_modules/.package-lock.json out of date, updated: node_modules
+17 notice
+18 notice package: obsidian-task-sync@0.1.0
+19 notice Tarball Contents
+20 notice 10.3kB README.md
+20 notice 328B cordis.patch.yml
+20 notice 177.7kB dist/client.js
+20 notice 44.6kB dist/index.js
+20 notice 1.1kB icon.svg
+20 notice 249B locale/en.json
+20 notice 240B locale/zh.json
+20 notice 1.6kB package.json
+21 notice Tarball Details
+22 notice name: obsidian-task-sync
+23 notice version: 0.1.0
+24 notice filename: obsidian-task-sync-0.1.0.tgz
+25 notice package size: 52.5 kB
+26 notice unpacked size: 236.1 kB
+27 notice shasum: f3231a95926b7bd99f4264a52bbe75d99dd41479
+28 notice integrity: sha512-iIRqzRpn6icHk[...]pjnYP0/VzTniw==
+29 notice total files: 8
+30 notice
+31 verbose cwd C:\Users\Administrator\Documents\deepseek-harness\default-workspace\obsidian-task-sync
+32 verbose os Windows_NT 10.0.26200
+33 verbose node v24.18.0
+34 verbose npm  v12.0.2
+35 verbose exit 0
+36 info ok

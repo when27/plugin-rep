@@ -1,0 +1,137 @@
+{
+  "bootedAt": "2026-11-20T03:36:28.936Z",
+  "created": [
+    {
+      "id": "session-085ab2ee-9252-4c42-ae16-1164f7ccb317",
+      "preset": "cordis",
+      "subagent": false,
+      "at": "2026-11-20T03:36:44.569Z"
+    },
+    {
+      "id": "session-2323dfb2-ff43-4c48-8f98-30d3db39019a",
+      "preset": "ops-ptc",
+      "subagent": false,
+      "at": "2026-11-20T04:30:35.141Z"
+    },
+    {
+      "id": "mnemon-run-v1-504a0613-6530-4437-b525-2a7fbe7cbd79",
+      "preset": "cordis",
+      "subagent": true,
+      "at": "2026-11-20T04:40:43.839Z"
+    },
+    {
+      "id": "session-d62bfea9-8eba-41dd-91fa-4e264567ee8a",
+      "preset": "ops-ptc",
+      "subagent": false,
+      "at": "2026-11-20T04:50:20.179Z"
+    },
+    {
+      "id": "mnemon-run-v1-73f32274-60ee-4c0b-828f-05d5fe67c82e",
+      "preset": "cordis",
+      "subagent": true,
+      "at": "2026-11-20T05:05:57.216Z"
+    },
+    {
+      "id": "session-439d6ca1-0c99-496b-b75a-015f25117e1f",
+      "preset": "ops-ptc",
+      "subagent": false,
+      "at": "2026-11-20T05:09:15.941Z"
+    },
+    {
+      "id": "mnemon-run-v1-63bd4b66-4e93-49f6-89c0-3d1a1165d218",
+      "preset": "cordis",
+      "subagent": true,
+      "at": "2026-11-20T05:35:42.585Z"
+    }
+  ],
+  "guard": [
+    {
+      "id": "085ab2ee-9252-4c42-ae16-1164f7ccb317",
+      "role": "other",
+      "preset": "cordis"
+    },
+    {
+      "id": "2323dfb2-ff43-4c48-8f98-30d3db39019a",
+      "role": "other",
+      "preset": "ops-ptc"
+    },
+    {
+      "id": "2323dfb2-ff43-4c48-8f98-30d3db39019a",
+      "role": "other",
+      "preset": "cordis"
+    },
+    {
+      "id": "2323dfb2-ff43-4c48-8f98-30d3db39019a",
+      "role": "other",
+      "preset": "cordis"
+    },
+    {
+      "id": "mnemon-run-v1-504a0613-6530-4437-b525-2a7fbe7cbd79",
+      "role": "other",
+      "preset": "cordis"
+    },
+    {
+      "id": "d62bfea9-8eba-41dd-91fa-4e264567ee8a",
+      "role": "other",
+      "preset": "ops-ptc"
+    },
+    {
+      "id": "d62bfea9-8eba-41dd-91fa-4e264567ee8a",
+      "role": "other",
+      "preset": "cordis"
+    },
+    {
+      "id": "d62bfea9-8eba-41dd-91fa-4e264567ee8a",
+      "role": "other",
+      "preset": "cordis"
+    },
+    {
+      "id": "mnemon-run-v1-73f32274-60ee-4c0b-828f-05d5fe67c82e",
+      "role": "other",
+      "preset": "cordis"
+    },
+    {
+      "id": "439d6ca1-0c99-496b-b75a-015f25117e1f",
+      "role": "other",
+      "preset": "ops-ptc"
+    },
+    {
+      "id": "mnemon-run-v1-63bd4b66-4e93-49f6-89c0-3d1a1165d218",
+      "role": "other",
+      "preset": "cordis"
+    }
+  ],
+  "switches": [
+    {
+      "id": "2323dfb2-ff43-4c48-8f98-30d3db39019a",
+      "from": null,
+      "to": "cordis",
+      "event": "agent-preset/selected",
+      "at": "2026-11-20T04:30:43.627Z"
+    },
+    {
+      "id": "2323dfb2-ff43-4c48-8f98-30d3db39019a",
+      "from": null,
+      "to": "cordis",
+      "event": "agent-preset/selected",
+      "at": "2026-11-20T04:30:43.628Z"
+    },
+    {
+      "id": "d62bfea9-8eba-41dd-91fa-4e264567ee8a",
+      "from": null,
+      "to": "cordis",
+      "event": "agent-preset/selected",
+      "at": "2026-11-20T04:50:23.357Z"
+    },
+    {
+      "id": "d62bfea9-8eba-41dd-91fa-4e264567ee8a",
+      "from": null,
+      "to": "cordis",
+      "event": "agent-preset/selected",
+      "at": "2026-11-20T04:50:23.358Z"
+    }
+  ],
+  "setups": [],
+  "efforts": [],
+  "disposals": 3
+}
