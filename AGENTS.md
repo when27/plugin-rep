@@ -45,7 +45,13 @@ Supporting documents:
 - [`profiles/global/agent_rules.md`](./profiles/global/agent_rules.md) — human-readable copy
   of the master/subagent operating rules (DSH does **not** auto-load this path; the binding
   copy is runtime memory). Documented in the profile dictionary.
-- [`README.md`](./README.md) — human-facing setup and restore guide.
+- [`AGENTS.local.md`](./AGENTS.local.md) — machine-specific overlay: the absolute paths of
+  the DSH home, profile, workspace, repo checkout, and skill roots on the machine that
+  restored this export, plus the differences from the exported profile. DSH loads it after
+  this file, so its paths win. Not present in a fresh clone until a restore creates it.
+- [`README.md`](./README.md) — human-facing setup and restore guide, including the
+  **DSH folders this setup lives in** table (profile, sessions, skill discovery roots,
+  instruction-file overlays).
 - Feature deep-dives: [`plugins/usage-popup/ARCHITECTURE.md`](./plugins/usage-popup/ARCHITECTURE.md),
   [`plugins/usage-popup/PLUGIN_NOTES.md`](./plugins/usage-popup/PLUGIN_NOTES.md),
   [`plugins/obsidian-task-sync/README.md`](./plugins/obsidian-task-sync/README.md),

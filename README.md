@@ -75,6 +75,32 @@ The full step-by-step procedure, caveats, and verification results live in
 [AGENTS.md](AGENTS.md). Plugin build/pack and test commands live in each feature's
 `OVERVIEW.md`.
 
+## DSH folders this setup lives in
+
+The restore touches these locations. `%USERPROFILE%` is `~` on macOS/Linux; `$DSH_HOME`
+defaults to `%USERPROFILE%\.dsh`.
+
+| Folder | Path | What goes there |
+| --- | --- | --- |
+| DSH home | `%USERPROFILE%\.dsh` | Profiles, sessions, storages, attachments, credentials. |
+| Active profile | `%USERPROFILE%\.dsh\profiles\desktop` | `package.json` (bundle list + `link:`/`file:` deps), `cordis.patch.yml`, `cordis.yml`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `compatibility.json`, `node_modules/`. |
+| Profile backup | `%USERPROFILE%\.dsh\profiles\desktop\.restore-backup-<timestamp>` | Pre-restore copies of the profile config files (created by a restore). |
+| Session store | `%USERPROFILE%\.dsh\sessions` | Session history; a session keeps the preset it was created with. |
+| Project skill root | `<project>\.dsh\skills` | Discovery priority 100 — wins over every other root. |
+| Project agent skill root | `<project>\.agents\skills` | Discovery priority 200. |
+| Global skill root | `%USERPROFILE%\.dsh\skills` | Discovery priority 400 — applies to all projects. |
+| Skill layout | `<any skill root>\<kebab-name>\SKILL.md` | No recursive discovery: `SKILL.md` must sit at exactly this depth, with `guides/**` below it. |
+| Profile instruction overlay | `<project>\AGENTS.md`, `<project>\AGENTS.local.md` | DSH loads the base candidates (`AGENTS.md`, `CLAUDE.md`) then the local overlays (`AGENTS.local.md`, `CLAUDE.local.md`); the overlay wins. |
+
+Two consequences worth remembering:
+
+- **`<repo>` in `package.json` is not `<workspace>`.** If you clone this repo inside a
+  workspace folder (for example `<workspace>\plugin-rep`), every `link:`/`file:` dependency
+  needs that extra segment. A machine-specific copy of the values is kept in
+  [`AGENTS.local.md`](./AGENTS.local.md).
+- **`pnpm install` must run in the profile directory**, never in the repo, so the plugin
+  tarballs land in `%USERPROFILE%\.dsh\profiles\desktop\node_modules`.
+
 ## Documentation
 
 - [AGENTS.md](AGENTS.md) — master repository dictionary, global operating rules,
